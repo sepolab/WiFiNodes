@@ -3,7 +3,7 @@ This folder contain all embedded codes for all kinds of wifi nodes
 Release 2.0
 Room has got 4 prototype Nodes.
 
-Usage (using for all Nodes):
+#Usage (using for all Nodes):
 - 1_Provide DC power 5V-1A
 - 2_Reset Soft Reset button or connect GPIO 0 to GND in 3 seconds to start WiFi Direct Mode
 - 3_Use phone or PC, search WiFi network name: TRI01. Default password: passsword
@@ -18,7 +18,7 @@ Usage (using for all Nodes):
   -- 6.6_Publish topic that this node will send message
 - 7_Save setting, wait for 5 seconds =>Done
 
-TRI01_IRController:
+#TRI01_IRController:
 - Input/Output:
   - GPIO 0: NA
   - GPIO 1: Tx
@@ -48,7 +48,7 @@ TRI01_IRController:
     - ID: Panasonic; Mitshubishi
       - command: power; oscil; speed; time; rhyth
 
-TRI02_PowerOutlet:
+#TRI02_PowerOutlet:
 - INput/Output:
   - GPIO 0: NA
   - GPIO 1: Tx
@@ -73,7 +73,7 @@ TRI02_PowerOutlet:
     - payload_on: SETCONTROL2 ON
     - payload_off: SETCONTROL2 OFF
 
-TRI03_SecurityNode:
+#TRI03_SecurityNode:
 - INput/Output:
   - GPIO 0: DHT22 Thermo Sensor
   - GPIO 1: Tx
@@ -99,7 +99,7 @@ TRI03_SecurityNode:
   - For sensor:
     - JSON: {\"temperature\":\"%s\",\"humidity\":\"%s\",\"light\":\"%s\",\"door\":\"%s\",\"ishuman\":\"%s\"}"
 
-TRI04_MixedForRoom:
+#TRI04_MixedForRoom:
 - INput/Output:
   - GPIO 0: DHT21 Thermo Sensor
   - GPIO 1: Tx
