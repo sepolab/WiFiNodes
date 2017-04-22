@@ -30,10 +30,9 @@ TRI01_IRController:
   - GPIO 13: IR-Emitted PIN
   - GPIO 14: NA
   - GPIO 15: NA
-  - GPIO 15: Door Sensor
+  - GPIO 16: NA
 - Action: 
   - receive command from Broker then convert to IR signal to control devices: Toshiba AC; Daikin AC; Panasonic AC; Panasonic desk/wall fan; Mitshubishi Desk fan.
-
 - API:
   - For Air Conditioner:
     - To turn ON: ACCONTROLLER ON 
@@ -45,11 +44,36 @@ TRI01_IRController:
       - swing: yes/no
 
   - For Wall Fan:
-   - CONTROLWF {"ID":"Panasonic","command":"power"} 
-   - ID: Panasonic; Mitshubishi
-     - command: power; oscil; speed; time; rhyth
+    - CONTROLWF {"ID":"Panasonic","command":"power"} 
+    - ID: Panasonic; Mitshubishi
+      - command: power; oscil; speed; time; rhyth
 
-TRI03_OutDoorNode:
+TRI02_PowerOutlet:
+- INput/Output:
+  - GPIO 0: NA
+  - GPIO 1: Tx
+  - GPIO 2: LED - WiFi Config
+  - GPIO 3: RX
+  - GPIO 4: NA
+  - GPIO 5: NA
+  - GPIO 12: Relay1 Control
+  - GPIO 13: Relay1 Control
+  - GPIO 14: NA
+  - GPIO 15: button for relay1
+  - GPIO 16: button for relay2
+- Action:
+  - Turn ON/OFF Relay to enable/disable Power Outlet usage
+  - Buttons to give user can perform directly plysical to devices - no depends on Network
+  - Sync states of relay from buttons to server.
+- API:
+  - For Relay1:
+    - payload_on: SETCONTROL1 ON
+    - payload_off: SETCONTROL1 OFF
+  - For Relay2:
+    - payload_on: SETCONTROL2 ON
+    - payload_off: SETCONTROL2 OFF
+
+TRI03_SecurityNode:
 - INput/Output:
   - GPIO 0: DHT22 Thermo Sensor
   - GPIO 1: Tx
@@ -61,14 +85,13 @@ TRI03_OutDoorNode:
   - GPIO 13: Light Sensor
   - GPIO 14: NA
   - GPIO 15: NA
-  - GPIO 15: Door Sensor
+  - GPIO 16: Door Sensor
 - Action:
   - Keep tracking temperature and humid via DHT22
   - Keep tracking Door sensor via DoorSensor
   - keep tracking Radar to detect motion
   - keep tracking brightness of enviroment via light sensor
   - Alarm when receive command (ALARM ON/ALARM OFF) from subcribe topic
-
 - API:
   - For Alarm:
     - payload_on: ALARM ON
@@ -76,3 +99,29 @@ TRI03_OutDoorNode:
   - For sensor:
     - JSON: {\"temperature\":\"%s\",\"humidity\":\"%s\",\"light\":\"%s\",\"door\":\"%s\",\"ishuman\":\"%s\"}"
 
+TRI04_MixedForRoom:
+- INput/Output:
+  - GPIO 0: DHT21 Thermo Sensor
+  - GPIO 1: Tx
+  - GPIO 2: LED - WiFi Config
+  - GPIO 3: RX
+  - GPIO 4: NA
+  - GPIO 5: NA
+  - GPIO 12: PinRelay
+  - GPIO 13: Light Sensor
+  - GPIO 14: button for relay1
+  - GPIO 15: NA
+  - GPIO 16: Door Sensor
+- Action:
+  - Keep tracking temperature and humid via DHT21
+  - Keep tracking Door sensor via DoorSensor
+  - Turn ON/OFF Relay to enable/disable Power Outlet usage
+  - Buttons to give user can perform directly plysical to devices - no depends on Network
+  - Sync states of relay from buttons to server.
+  - keep tracking brightness of enviroment via light sensor
+- API:
+  - For Relay:
+    - payload_on: SETCONTROLL ON
+    - payload_off: SETCONTROLL OFF
+  - For sensor:
+    - JSON: {\"temperature\":\"%s\",\"humidity\":\"%s\",\"light\":\"%s\",\"door\":\"%s\",\"switch\":\"%s\"}"
