@@ -69,8 +69,8 @@ PubSubClient client(espClient);//April23
 unsigned long previousMillis3 = 0; //set time for interval publish
 unsigned long previousMillis4 = 0; //set time for interval publish 
 //char mqttClientID[] = ssid;
-char pubTopicGen[40] = "Trihome/tri02/state";
-char subTopicName[40] = "Trihome/tri02/set";
+char pubTopicGen[40] = "Trihome/testbed/state";
+char subTopicName[40] = "Trihome/testbed/set";
 int valueOfSensor = 0;// value that will be published
 char pubMsg[150] = "Hello Server,it is client's 1st message!";//payload of publishing message
 char defaultMsg[] = "Hello its default message payload";//payload of publishing message
@@ -302,7 +302,7 @@ void keepAlive (char inputString[]) {
       snprintf(pubMsg, 100, "{\"NodeMacAddress\":\"%02X:%02X:%02X:%02X:%02X:%02X\",\"State\":\"%s\"}",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5], breakedValue);
       Serial.print("Message send: ");
       Serial.println(pubMsg);
-      client.publish(pubTopicGen, pubMsg,true);
+      client.publish(pubTopicGen, pubMsg, true);
   } 
 }
 
@@ -337,7 +337,8 @@ void callback(char* topic, byte* payload, unsigned int length) {
 //      Serial.print("Message send: ");
 //      Serial.println(pubMsg);
 //      client.publish(pubTopicGen, pubMsg,true);
-    keepAlive("COMMAND NOT FOUND");
+    char temptCommand[] = "COMMAND NOT FOUND";
+    keepAlive(temptCommand);
   }
 //----------END case 1.2 of NORMAL MODE -----------------------
 }
@@ -365,7 +366,8 @@ void reconnect() {
     // Attempt to connect
     if (client.connect(ssid)) {
       Serial.println("connected");
-      KeepAlive("Reconnecting");
+      char temptCommand[] = "Reconnecting";
+      keepAlive(temptCommand);
       // Once connected, publish an announcement...
       // ... and resubscribe
       client.subscribe(subTopicName);
@@ -619,5 +621,3 @@ void loop() {
   client.loop();
   }
 }
-
-
