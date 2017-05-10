@@ -1245,4 +1245,7 @@ void loop() {
   }
   client.loop();
   }
+  else {
+    setup_wifi();
+}
 }
