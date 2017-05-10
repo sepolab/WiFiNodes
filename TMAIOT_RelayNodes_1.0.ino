@@ -135,8 +135,8 @@ bool readReceivedMsgInJson (char inputString[]) {
 }
 
 void isControlNode(char inputString[]) {
-  char breakedValue[150];
-  char breakedValue1[150];
+  char breakedValue[150] = "";
+  char breakedValue1[150] = "";
   int check = 0;
   int countSpace = 0;
   int i = 0;
@@ -203,7 +203,7 @@ void isControlNode(char inputString[]) {
     else {
       isDefinedCommand = false;
     }
-    sendConfirm();    
+    sendConfirmtoRetained(breakedValue1);    
   } else {
     isDefinedCommand = false;
   }
@@ -213,68 +213,11 @@ void isControlNode(char inputString[]) {
 //---------------
 //SendConfirm () will send feedback to MQTT to confirm the command 
 //---------------
-void sendConfirm () {
-          firstTime = false;
-        //-----SWITCH 1 CONFIRMATION----BEGIN-----{"Relay":"1/2/3/4","Action":"on/off"}
-        if (pinControl1State == LOW) {
-            if (sendOnetime1) {
-              client.publish(pubTopicGen, "{\"Relay\":\"1\",\"Action\":\"on\"}", true);
-              delay(50);
-              sendOnetime1 = false;
-            }
-        } else if (pinControl1State == HIGH) {
-            if (sendOnetime1) {
-              client.publish(pubTopicGen, "{\"Relay\":\"1\",\"Action\":\"off\"}", true);
-              delay(50);  
-              sendOnetime1 = false;
-            }
-        }
-        //-----SWITCH 1 CONFIRMATION----END-----
-        //-----SWITCH 2 CONFIRMATION----BEGIN-----{"Relay":"1/2/3/4","Action":"on/off"}
-        if (pinControl2State == LOW) {
-            if (sendOnetime2) {
-              client.publish(pubTopicGen, "{\"Relay\":\"2\",\"Action\":\"on\"}",true);
-              delay(50);
-              sendOnetime2 = false;
-            }
-        } else if (pinControl2State == HIGH) {
-            if (sendOnetime2) {
-              client.publish(pubTopicGen, "{\"Relay\":\"2\",\"Action\":\"off\"}",true);
-              delay(50);
-              sendOnetime2 = false;
-            }
-        }
-        //-----SWITCH 2 CONFIRMATION----END-----
-        //-----SWITCH 3 CONFIRMATION----BEGIN-----{"Relay":"1/2/3/4","Action":"on/off"}
-        if (pinControl3State == LOW) {
-            if (sendOnetime3) {
-              client.publish(pubTopicGen, "{\"Relay\":\"3\",\"Action\":\"on\"}",true);
-              delay(50);
-              sendOnetime3 = false;
-            }
-        } else if (pinControl3State == HIGH) {
-            if (sendOnetime3) {
-              client.publish(pubTopicGen, "{\"Relay\":\"3\",\"Action\":\"off\"}",true);
-              delay(50);
-              sendOnetime3 = false;
-            }
-        }
-        //-----SWITCH 3 CONFIRMATION----END-----
-        //-----SWITCH 4 CONFIRMATION----BEGIN-----{"Relay":"1/2/3/4","Action":"on/off"}
-        if (pinControl4State == LOW) {
-            if (sendOnetime4) {
-              client.publish(pubTopicGen, "{\"Relay\":\"4\",\"Action\":\"on\"}",true);
-              delay(50);
-              sendOnetime4 = false;
-            }
-        } else if (pinControl4State == HIGH) {
-            if (sendOnetime4) {
-              client.publish(pubTopicGen, "{\"Relay\":\"4\",\"Action\":\"off\"}",true);
-              delay(50);
-              sendOnetime4 = false;
-            }
-        }
-        //-----SWITCH 4 CONFIRMATION----END-----
+void sendConfirmtoRetained (char inputString[]) {
+  firstTime = false;
+  Serial.print("Message send: ");
+  Serial.println(inputString);
+  client.publish(pubTopicGen, inputString, true);
 }
 
 //-------------------------------------
@@ -284,26 +227,13 @@ void sendConfirm () {
 //2_reconnecting when re-connect
 //------------------------------------
 void keepAlive (char inputString[]) {
-  char breakedValue[150];
-  char breakedValue1[150];
-  int check = 0;
-  int countSpace = 0;
-  int i = 0;
-  int j = 0;
-  int countOfChar = 0;
-  Serial.println(inputString);
-  //Remove All un-needed # command from received message
-  while (inputString[i] != '#') {
-                breakedValue[i] = inputString[i];
-                breakedValue1[i] = inputString[i];
-                i++;
-  }
-  if (client.connected()) {
-      snprintf(pubMsg, 100, "{\"NodeMacAddress\":\"%02X:%02X:%02X:%02X:%02X:%02X\",\"State\":\"%s\"}",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5], breakedValue);
-      Serial.print("Message send: ");
-      Serial.println(pubMsg);
-      client.publish(pubTopicGen, pubMsg, true);
-  } 
+  char publishMessage [100] = "";
+  snprintf(publishMessage, 100, "{\"NodeMacAddress\":\"%02X:%02X:%02X:%02X:%02X:%02X\",\"State\":\"%s\"}",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5], inputString);
+  Serial.print("Message send: ");
+  Serial.println(publishMessage);
+  char keepAliveTopic [55] = "";
+  snprintf(keepAliveTopic, 55,"%s/keepAlive",pubTopicGen);
+  client.publish(keepAliveTopic, publishMessage, true);
 }
 
 //-------- END case 1.2 if NORMAL MODE-------------------------
@@ -366,11 +296,12 @@ void reconnect() {
     // Attempt to connect
     if (client.connect(ssid)) {
       Serial.println("connected");
+      client.subscribe(subTopicName);
       char temptCommand[] = "Reconnecting";
-      keepAlive(temptCommand);
+      keepAlive(temptCommand);      
       // Once connected, publish an announcement...
       // ... and resubscribe
-      client.subscribe(subTopicName);
+
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -609,7 +540,8 @@ void loop() {
       previousMillis3 = currentMillis3;
       unsigned long currentMillis4 = millis();
       if (client.connected()) {
-        keepAlive("Active");
+        char temptCommand[] = "Active";
+        keepAlive(temptCommand);
     }
     else {
       if ((currentMillis4 - previousMillis4 > reconnectInveral)) {
