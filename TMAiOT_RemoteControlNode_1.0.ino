@@ -8,7 +8,7 @@
 #include <PubSubClient.h> //April23
 #include "math.h"
 
-IRsend irsend(13); //an IR led is connected to GPIO pin 13 -D7
+//IRsend irsend(13); //an IR led is connected to GPIO pin 13 -D7
 //Example signals from various Toshiba AC units (very long signals)
 const unsigned int AC_Toshiba_irSignalOpenAt27FullFan[] PROGMEM = {4372,4364,540,1628,532,1632,528,1628,532,1628,532,548,532,548,584,1580,532,544,588,492,536,544,532,548,536,548,532,1624,536,1628,584,496,532,1632,528,556,524,548,532,552,532,552,524,548,536,544,536,1624,588,1572,536,1624,536,1632,532,1624,532,1632,528,1628,536,1624,536,548,532,548,584,496,532,552,528,548,532,548,532,548,532,552,528,556,524,1632,532,1624,536,548,528,1628,536,548,532,548,532,548,532,600,480,548,584,1576,532,1628,532,552,528,552,532,548,532,548,580,500,532,1624,536,548,532,548,532,548,532,548,532,552,528,580,504,616,460,548,536,576,500,1636,528,1628,532,548,532,548,532,548,584,520,508,548,532,7468,4372,4368,536,1628,532,1632,532,1624,536,1628,532,548,532,600,480,1636,524,552,528,548,532,600,480,548,536,552,524,1628,536,1624,584,500,532,1628,532,552,528,548,532,548,532,572,512,552,524,548,532,1680,480,1628,536,1632,528,1624,536,1628,532,1628,532,1628,532,1628,536,552,528,548,580,500,532,552,528,552,528,548,532,552,528,548,532,548,532,1628,532,1628,536,548,532,1624,536,552,528,552,580,496,532,572,508,548,588,1572,532,1628,532,548,536,544,536,620,460,548,580,500,532,1628,532,600,480,548,532,600,480,552,528,548,536,544,532,620,460,548,532,548,584,1580,532,1628,532,580,500,620,460,548,584,500,532,616,460};
 const unsigned int AC_Toshiba_irSignalCloseAt27FullFan[] PROGMEM = {4396,4340,540,1628,532,1624,536,1624,536,1628,532,552,532,548,528,1632,532,548,532,544,536,548,532,548,532,544,536,1624,536,1628,532,548,540,1620,532,548,532,580,500,552,528,552,528,552,532,548,532,1624,532,1636,528,1624,536,1628,532,1628,536,1628,532,1628,528,1632,532,572,508,548,532,548,532,548,532,548,532,548,532,552,528,548,532,548,532,1632,532,1624,536,552,524,1628,536,572,508,552,528,552,528,548,532,552,528,1628,536,1628,528,548,536,544,536,544,536,1624,536,1628,532,1628,532,548,532,572,512,548,532,548,532,548,532,544,536,548,532,548,532,548,532,1624,536,1628,532,552,528,556,524,1632,528,1628,536,552,528,7468,4396,4340,540,1628,532,1624,536,1628,532,1632,532,544,532,556,528,1628,532,552,528,548,528,548,536,552,528,548,532,1624,536,1628,532,548,532,1632,528,548,532,548,532,552,532,568,512,544,536,548,532,1628,532,1628,532,1628,536,1624,536,1624,536,1628,528,1632,532,1628,532,548,532,548,532,552,528,552,528,552,528,548,536,544,532,548,536,548,532,1628,532,1624,536,548,532,1628,532,548,532,548,532,580,504,544,532,552,528,1632,528,1632,532,548,532,548,532,548,532,1628,532,1628,536,1624,532,552,532,548,532,552,524,552,532,548,532,552,528,552,528,548,532,548,532,1628,532,1628,532,552,528,548,536,1624,536,1628,532,572,508};
@@ -142,10 +142,10 @@ bool wifiReconnecting = false;
 bool factoryReset = false;
 char APssid[20] = "SePoLab"; //AP is ESP will connect
 char APpassword[20] = "tn17691510";
-const char ssid[20] = "TRI01"; // ESP in AP mode
+const char ssid[20] = "IRControlNode"; // ESP in AP mode
 const char password[] = "password";
 WiFiClient espClient; //April23
-
+byte mac[6];
 //--------------MQTT client PRAMETERS--------------
 //define mqtt server default values here, if there are different values in config.json, they are overwritten.
 char mqtt_server[40] = "192.168.1.30"; //April24
@@ -184,6 +184,8 @@ char WFID[20];
 char WFCommand[7] = "none"; // on or off
 char finResult[7];
 // END OF VARIABLES--------------------------
+
+
 void ledBlink() {
   //---------LED INDICATION BLINKING STATE------------------------------
   //STATE 1: BLINK AS CONNECTED: LED WILL FASH 3 TIMES (EACH 50 MILISECONDS) THEN TURN OFF IN 1 SECOND.
@@ -238,7 +240,7 @@ void ledBlink() {
 //    
 void adjustWF() {
 //  if (readReceivedMsgInWFJson(breakedValue)) { // PARSE DATA SUCCESSFULLY
-            convertToWFVariableName(WFID,WFCommand);
+      if (convertToWFVariableName(WFID,WFCommand)) {
             Serial.print("IR sent code: ");
             if ((finResult[0] == 'W') and (finResult[1] == 'F')) {
               if ((finResult[2] == 'M') and (finResult[3] == 'i')) {
@@ -286,25 +288,11 @@ void adjustWF() {
                 } else { Serial.println("WFPa Not Found");}
               }
             }
-//          SEND CONFIRMATION TO PUBLISH TOPIC       
-          if ((client.connected())) {  
-              snprintf(pubMsg, 120, "{\"ID\":\"%s\",\"body\":\"OK\",\"brand\":\"%s\",\"command\":\"%s\"}",ssid,WFID,WFCommand);
-              Serial.print("Message send: ");Serial.println(pubMsg);
-              client.publish(pubTopicGen, pubMsg, true);
-              delay(50);
-            }  
-//          } else {
-//              if ((client.connected())) {  
-//              snprintf(pubMsg, 120, "{\"ID\":\"%s\",\"body\":\"cannot break data from request\"",ssid);
-//              Serial.print("Message send: ");Serial.println(pubMsg);
-//              client.publish(pubTopicGen, pubMsg, true);
-//              delay(50);
-//            }      
-//          }
-}
+}}
+
 void adjustAC() {
 //  if (readReceivedMsgInACJson(breakedValue)) { // PARSE DATA SUCCESSFULLY
-            convertToACVariableName(ACID,ACmode,ACtemp,ACfan,ACswing);
+      if (convertToACVariableName(ACID,ACmode,ACtemp,ACfan,ACswing)) {
             Serial.print("IR sent code: ");
             if ((finalResult[0] == 'T') and (finalResult[1] == 'o')) {
               if (finalResult[2] == '1') {
@@ -681,26 +669,11 @@ void adjustAC() {
                 }
               }
             }
-                
-//          SEND CONFIRMATION TO PUBLISH TOPIC       
-          if ((client.connected())) {  
-              snprintf(pubMsg, 150, "{\"DeviceType\":\"AC\",\"Brand\":\"%s\",\"State\":\"%s\",\"Mode\":\"%s\",\"Temp\":\"%s\",\"Fan\":\"%s\",\"Swing\":\"%s\"}",ACID,ACstate,ACmode,ACtemp,ACfan,ACswing);
-              Serial.print("Message send: ");Serial.println(pubMsg);
-              client.publish(pubTopicGen, pubMsg, true);
-              delay(50);
-            }  
-//          } else {
-//              if ((client.connected())) {  
-//              snprintf(pubMsg, 120, "{\"ID\":\"%s\",\"body\":\"cannot break data from request\"",ssid);
-//              Serial.print("Message send: ");Serial.println(pubMsg);
-//              client.publish(pubTopicGen, pubMsg, true);
-//              delay(50);
-//            }      
-//          }
+      }
 }
 // 
 //------------------------------------------------------------
-void convertToACVariableName(char brand[],char Mode[],char temperature[], char fanLevel[], char swing[]) {
+bool convertToACVariableName(char brand[],char Mode[],char temperature[], char fanLevel[], char swing[]) {
   bool isValid = true;
   char bufB[3] = "00";
   if ((brand[0] == 'T') and (brand[1] == 'o') and (brand[2] == 's') and (brand[3] == 'h') and (brand[4] == 'i') and (brand[5] == 'b') and (brand[6] == 'a'))
@@ -737,9 +710,12 @@ void convertToACVariableName(char brand[],char Mode[],char temperature[], char f
   if (isValid) {
     snprintf(finalResult, 10,"%s%s%s%s%s",bufB,bufM,temperature,bufF,bufS);
     Serial.print("Covert to variable Name: ");Serial.println(finalResult);
-
+    return true;
+    isDefinedCommand = true;
   } else {
     snprintf(finalResult, 10,"failed");
+    return false;
+    isDefinedCommand = false;
   }
 }
 //-------------------END PROCEDURE------------------------------
@@ -750,7 +726,7 @@ void convertToACVariableName(char brand[],char Mode[],char temperature[], char f
 //    
 // 
 //------------------------------------------------------------
-void convertToWFVariableName(char brand[],char comm[]) {
+bool convertToWFVariableName(char brand[],char comm[]) {
   bool isValid = true;
   char bufB[3] = "00";
   if ((brand[0] == 'M') and (brand[1] == 'i') and (brand[2] == 't') and (brand[3] == 's') and (brand[4] == 'h') and (brand[5] == 'u') and (brand[6] == 'b'))
@@ -772,9 +748,12 @@ void convertToWFVariableName(char brand[],char comm[]) {
   if (isValid) {
     snprintf(finResult, 7,"WF%s%s",bufB,bufC);
     Serial.print("Covert to variable Name: ");Serial.println(finResult);
-
+    return true;
+    isDefinedCommand = true;
   } else {
+    return false;
     snprintf(finResult, 7,"failed");
+    isDefinedCommand = false;
   }
 }
 //-------------------END PROCEDURE------------------------------
@@ -896,9 +875,36 @@ bool readReceivedMsgInJson (char inputString[]) {
 // Optional Parameter for AC: mode, temp, fan, swing
 // Optional Parameter for WF: command
 //------------------------------------------------------------
+//SendConfirm () will send feedback to MQTT to confirm the command 
+//---------------
+void sendConfirmtoRetained (char inputString[]) {
+  firstTime = false;
+  Serial.print("Message send: ");
+  Serial.println(inputString);
+  client.publish(pubTopicGen, inputString, true);
+}
+
+//-------------------------------------
+//keep-alive interval to update node status
+//There is 2 states of interval
+//1_active when ping frequently
+//2_reconnecting when re-connect
+//------------------------------------
+void keepAlive (char inputString[]) {
+  char publishMessage [100] = "";
+  snprintf(publishMessage, 100, "{\"NodeMacAddress\":\"%02X:%02X:%02X:%02X:%02X:%02X\",\"State\":\"%s\"}",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5], inputString);
+  Serial.print("Message send: ");
+  Serial.println(publishMessage);
+  char keepAliveTopic [55] = "";
+  snprintf(keepAliveTopic, 55,"%s/keepAlive",pubTopicGen);
+  client.publish(keepAliveTopic, publishMessage, true);
+}
+//------------------------------------
+
 void isControlNode(char inputString[]) {
-  char breakedValue[150];
-  char breakedValue1[150];
+  char breakedValue[150] = "";
+  char breakedValue1[150] = "";
+  char breakedValue2[150] = "";
   int check = 0;
   int countSpace = 0;
   int i = 0;
@@ -909,6 +915,7 @@ void isControlNode(char inputString[]) {
   while (inputString[i] != '#') {
                 breakedValue[i] = inputString[i];
                 breakedValue1[i] = inputString[i];
+                breakedValue2[i] = inputString[i];
                 i++;
   }
 
@@ -925,22 +932,17 @@ void isControlNode(char inputString[]) {
     } 
     else if ((ACstate[0] == 'O') and (ACstate[1] == 'f') and (ACstate[2] == 'f')) {
       sendRAW_Flash(AC_Toshiba_irSignalCloseAt27FullFan, sizeof(AC_Toshiba_irSignalCloseAt27FullFan)/sizeof(int),38);
-      if ((client.connected())) {  
-              snprintf(pubMsg, 150, "{\"DeviceType\":\"AC\",\"Brand\":\"%s\",\"State\":\"%s\",\"Mode\":\"%s\",\"Temp\":\"%s\",\"Fan\":\"%s\",\"Swing\":\"%s\"}",ACID,ACstate,ACmode,ACtemp,ACfan,ACswing);
-              Serial.print("Message send: ");Serial.println(pubMsg);
-              client.publish(pubTopicGen, pubMsg, true);
+      isDefinedCommand = true;
     }
-    isDefinedCommand = true;
-  } else
-  if ((DeviceType[0] == 'W') and (DeviceType[1] == 'F')) {
+    sendConfirmtoRetained(breakedValue2);
+  } else if ((DeviceType[0] == 'W') and (DeviceType[1] == 'F')) {
     Serial.println(breakedValue1);
     readReceivedMsgInWFJson(breakedValue1);
     adjustWF();
-    isDefinedCommand = true;
+    sendConfirmtoRetained(breakedValue2);
   } else {
     isDefinedCommand = false;
   } 
-}
 }
 //------------------------------------------------------------
 //PROCEDURE: VERIFY RECEIVED MESSAGE IS FOR CONTROLLING AC
@@ -977,12 +979,18 @@ void callback(char* topic, byte* payload, unsigned int length) {
 ////--------detect command-----------
   isDefinedCommand = false;
   if (!isDefinedCommand) { isControlNode(subMsg); }
-//  if (!isDefinedCommand) { isControllWF(subMsg); }
   if (!isDefinedCommand) {
-      snprintf (pubMsg, 30, "COMMAND NOT FOUND"); //strtok(inputString,"#"));
-      Serial.print("Message send: ");
-      Serial.println(pubMsg);
-      client.publish(pubTopicGen, pubMsg, true);
+      char temptCommand[200] = "";
+      char breakedValue[150] = "";
+      int i = 0;
+      int countOfChar = 0;
+      //Remove All un-needed # command from received message
+      while (subMsg[i] != '#') {
+                breakedValue[i] = subMsg[i];
+                i++;
+      }     
+      snprintf (temptCommand, 200, "[%s]: NO SYNTAX FOUND", breakedValue);
+      keepAlive(temptCommand);
   }
 }
 //----------END void callback -----------------------
@@ -1001,8 +1009,8 @@ void reconnect() {
     if (client.connect(ssid)) {
       Serial.println("connected");
       // Once connected, publish an announcement...
-      snprintf (pubMsg, 70, "ID: %s; state: Reconnecting...", ssid);
-      client.publish(pubTopicGen, pubMsg, true);
+      char temptCommand[] = "Reconnecting";
+      keepAlive(temptCommand); 
       // ... and resubscribe
       client.subscribe(subTopicName);
     } else {
@@ -1205,26 +1213,23 @@ void loop() {
   }
 
   //----STOP WI4341----------------------------------------------------
-  unsigned long currentMillis2 = millis();
-  //---------------- RESET INTERVAL FOR TESTING WIFI CONNECTED------------------
-  if (currentMillis2 - previousMillis2 >= 10000) {
-    previousMillis2 = currentMillis2;
-    wifiReconnecting = true;
-  }
-  else {
-    wifiReconnecting = false;
-  }
-  
-    if (checkWifi == true and client.connected()) {
-        client.loop();
-    } else {
+//Send response after receiving command from broker
+  if (checkWifi == true) {
+    unsigned long currentMillis3 = millis();
+    if (currentMillis3 - previousMillis3 > publishInveral) {
+      previousMillis3 = currentMillis3;
       unsigned long currentMillis4 = millis();
+      if (client.connected()) {
+        char temptCommand[] = "Active";
+        keepAlive(temptCommand);
+    }
+    else {
       if ((currentMillis4 - previousMillis4 > reconnectInveral)) {
       previousMillis4 = currentMillis4;
       reconnect();
       }
     }
+  }
+  client.loop();
+  }
 }
-
-
-
