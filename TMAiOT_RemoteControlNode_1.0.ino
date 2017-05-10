@@ -1092,6 +1092,19 @@ void setup() {
     client.setServer(mqtt_server, atoi(mqtt_port)); //April23
     client.setCallback(callback); //April23
     Serial.println("DONE Setup mqtt sever");
+    WiFi.macAddress(mac);
+    Serial.print("MAC: ");
+    Serial.print(mac[0],HEX);
+    Serial.print(":");
+    Serial.print(mac[1],HEX);
+    Serial.print(":");
+    Serial.print(mac[2],HEX);
+    Serial.print(":");
+    Serial.print(mac[3],HEX);
+    Serial.print(":");
+    Serial.print(mac[4],HEX);
+    Serial.print(":");
+    Serial.println(mac[5],HEX);
   }
   ledState = HIGH;
   digitalWrite(ledPin, ledState);
