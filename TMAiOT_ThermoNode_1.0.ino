@@ -73,8 +73,8 @@ unsigned long previousMillis4 = 0; //set time for interval publish
 char pubTopicGen[40] = "Trihome/tri03/state";
 char subTopicName[40] = "Trihome/tri03/set";
 int valueOfSensor = 0;// value that will be published
-char pubMsg[100] = "Hello Server,it is client's 1st message!";//payload of publishing message
-char subMsg[100]; //payload of subcribled message
+char pubMsg[150] = "Hello Server,it is client's 1st message!";//payload of publishing message
+char subMsg[150]; //payload of subcribled message
 long publishInveral = 15000;
 bool mqttConnected = false;
 const long reconnectInveral = 10000;
@@ -127,43 +127,53 @@ void DTHCalculation() {
     snprintf (bufHeatIndex, 9,"%d.%01d", d1, d2);
   }
 }
-//--------case 1.2 of NORMAL MODE of DTH->ESP->Cloud-----------
-void isSetPubTime(char inputString[]) {
-  char breakedCommand[] = "SETPUBTIME";
-  char breakedValue[5];
-  int check = 0;
-  int countSpace = 0;
-  int i = 0;
-  int j = 0;
-  int countOfChar = 0;
-  while (inputString[i] != '#') {
-    if (inputString[i] != ' ') {
-        if (countSpace == 0) {
-            if (breakedCommand[i] != inputString[i]) {
-                check++;
-            }
-            countOfChar++;     
-        } else {
-                breakedValue[j] = inputString[i];
-                j++;
-            } 
-      } else {
-      countSpace++;
-        }
-    i++;
-  }
-  if ((countOfChar == (sizeof(breakedCommand)-1)) and (check == 0) and (j != 0)) {
-      publishInveral = atoi(breakedValue) * 1000;
-      snprintf (pubMsg, 40, "%s => OK", inputString); //strtok(inputString,"#"));
-      Serial.print("Message send: ");
-      Serial.println(pubMsg);
-      client.publish(pubTopicGen, pubMsg,true);
-      isDefinedCommand = true;
-    } else {
-      isDefinedCommand = false;
-    }
+//---------------
+//SendConfirm () will send feedback to MQTT to confirm the command 
+//---------------
+void sendConfirmtoRetained (char inputString[]) {
+  firstTime = false;
+  Serial.print("Message send: ");
+  Serial.println(inputString);
+  client.publish(pubTopicGen, inputString, true);
 }
-
+//-------------------------------------
+//sendThermoIndex to update node status
+//There is 2 states of interval
+//1_Termperature
+//2_Humid
+//3_feelike
+//------------------------------------
+void sendThermoIndex () {
+  //-----TEMPERATURE PUT----BEGIN-----
+        firstTime = false;
+        DTHCalculation();
+        if (!sensorState) {
+             snprintf (bufHum, 4, "F");
+             snprintf (bufTemp, 9, "F");
+             snprintf (bufHeatIndex, 9, "F");
+        }
+        //-----TEMPERATURE PUT----END-----
+        char publishMessage [100] = "";
+        snprintf(publishMessage, 100, "{\"temperature\":\"%s\",\"humidity\":\"%s\",\"feelike\":\"%s\"}", bufTemp,bufHum,bufHeatIndex);
+        Serial.print("Message send: ");
+        Serial.println(publishMessage);
+        client.publish(pubTopicGen, publishMessage, true);
+}
+//-------------------------------------
+//keep-alive interval to update node status
+//There is 2 states of interval
+//1_active when ping frequently
+//2_reconnecting when re-connect
+//------------------------------------
+void keepAlive (char inputString[]) {
+  char publishMessage [100] = "";
+  snprintf(publishMessage, 100, "{\"NodeMacAddress\":\"%02X:%02X:%02X:%02X:%02X:%02X\",\"State\":\"%s\"}",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5], inputString);
+  Serial.print("Message send: ");
+  Serial.println(publishMessage);
+  char keepAliveTopic [55] = "";
+  snprintf(keepAliveTopic, 55,"%s/keepAlive",pubTopicGen);
+  client.publish(keepAliveTopic, publishMessage, true);
+}
 //-------- END case 1.2 if NORMAL MODE-------------------------
 //-----void callback description----
 //If the client is used to subscribe to topics, a callback function must be provided in the constructor.
@@ -189,11 +199,19 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.println();
 ////--------detect command-----------
   isDefinedCommand = false;
-  if (!isDefinedCommand) { isSetPubTime(subMsg); }
+  if (!isDefinedCommand) {  }
   if (!isDefinedCommand) {
-  snprintf(pubMsg, 100, "{\"NodeMacAddress\":\"%02X:%02X:%02X:%02X:%02X:%02X\",\"state\":\"NOT_FOUND\"}",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
-  Serial.println(pubMsg);     
-  client.publish(pubTopicGen, pubMsg,true);
+      char temptCommand[200] = "";
+      char breakedValue[150] = "";
+      int i = 0;
+      int countOfChar = 0;
+      //Remove All un-needed # command from received message
+      while (subMsg[i] != '#') {
+                breakedValue[i] = subMsg[i];
+                i++;
+      }     
+      snprintf (temptCommand, 200, "[%s]: NO SYNTAX FOUND", breakedValue);
+      keepAlive(temptCommand);
   }
 //----------END case 1.2 of NORMAL MODE -----------------------
 }
@@ -222,9 +240,8 @@ void reconnect() {
     if (client.connect(ssid)) {
       Serial.println("connected");
       // Once connected, publish an announcement...
-      snprintf(pubMsg, 100, "{\"NodeMacAddress\":\"%02X:%02X:%02X:%02X:%02X:%02X\",\"state\":\"Connecting\"}",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
-      Serial.println(pubMsg);
-      client.publish(pubTopicGen, pubMsg,true);
+      char temptCommand[] = "Reconnecting";
+      keepAlive(temptCommand);
       // ... and resubscribe
       client.subscribe(subTopicName);
     } else {
@@ -315,17 +332,17 @@ void setup() {
     Serial.println("DONE Setup mqtt sever");
     WiFi.macAddress(mac);
     Serial.print("MAC: ");
-    Serial.print(mac[5],HEX);
-    Serial.print(":");
-    Serial.print(mac[4],HEX);
-    Serial.print(":");
-    Serial.print(mac[3],HEX);
-    Serial.print(":");
-    Serial.print(mac[2],HEX);
+    Serial.print(mac[0],HEX);
     Serial.print(":");
     Serial.print(mac[1],HEX);
     Serial.print(":");
-    Serial.println(mac[0],HEX);
+    Serial.print(mac[2],HEX);
+    Serial.print(":");
+    Serial.print(mac[3],HEX);
+    Serial.print(":");
+    Serial.print(mac[4],HEX);
+    Serial.print(":");
+    Serial.println(mac[5],HEX);
   }
   ledState = HIGH;
   digitalWrite(ledPin, ledState);
@@ -451,39 +468,26 @@ void loop() {
     }
   }
   //----STOP WI4341----------------------------------------------------
-//Merge to put data both mqtt server and http server
-  if (checkWifi == true) {
-    unsigned long currentMillis3 = millis();
-    if (currentMillis3 - previousMillis3 > publishInveral) {
-      previousMillis3 = currentMillis3;
-      unsigned long currentMillis4 = millis();
-      if (client.connected()) {
-        //-----TEMPERATURE PUT----BEGIN-----
-        firstTime = false;
-        DTHCalculation();
-        if (!sensorState) {
-             snprintf (bufHum, 4, "F");
-             snprintf (bufTemp, 9, "F");
-             snprintf (bufHeatIndex, 9, "F");
+    if (checkWifi == true) {
+      unsigned long currentMillis3 = millis();
+      if (currentMillis3 - previousMillis3 > publishInveral) {
+        previousMillis3 = currentMillis3;
+        unsigned long currentMillis4 = millis();
+        if (client.connected()) {
+          sendThermoIndex(); 
+          char temptCommand[] = "Active";
+          keepAlive(temptCommand);
+      }
+      else {
+        if ((currentMillis4 - previousMillis4 > reconnectInveral)) {
+        previousMillis4 = currentMillis4;
+        reconnect();
         }
-        //-----TEMPERATURE PUT----END-----
-        snprintf(pubMsg, 100, "{\"NodeMacAddress\":\"%02X:%02X:%02X:%02X:%02X:%02X\",\"temperature\":\"%s\",\"humidity\":\"%s\",\"feelike\":\"%s\"}",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5], bufTemp,bufHum,bufHeatIndex);
-        Serial.println(pubMsg);
-        client.publish(pubTopicGen, pubMsg,true);
-        delay(50);
-    }
-    else {
-      if ((currentMillis4 - previousMillis4 > reconnectInveral)) {
-      previousMillis4 = currentMillis4;
-      reconnect();
       }
     }
-  }
-  client.loop();
+    client.loop();
   }
   else {
     setup_wifi();
   }
 }
-
-
