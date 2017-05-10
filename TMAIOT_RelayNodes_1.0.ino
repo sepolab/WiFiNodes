@@ -87,19 +87,15 @@ char relayCommand[5] = "";
 //---------CONTROL1 CONFIGURATION---------------------------------------
 int pinControl1 = 14;           // Use pinLED of Wifi indication.
 int pinControl1State = HIGH;
-bool sendOnetime1 = false;
 //---------CONTROL2 CONFIGURATION---------------------------------------
 int pinControl2 = 12;  
 int pinControl2State = HIGH;
-bool sendOnetime2 = false;
 //---------CONTROL3 CONFIGURATION---------------------------------------
 int pinControl3 = 13;           // Use pinLED of Wifi indication.
 int pinControl3State = HIGH;
-bool sendOnetime3 = false;
 //---------CONTROL4 CONFIGURATION---------------------------------------
 int pinControl4 = 15;  
 int pinControl4State = HIGH;
-bool sendOnetime4 = false;
 //--------END VAR=-----------------------------------------------
 
 //PROCEDURE: VERIFY RECEIVED MESSAGE IS FOR CONTROLLING NODE
@@ -156,49 +152,59 @@ void isControlNode(char inputString[]) {
       if ((relayCommand[0] == 'o') and (relayCommand[1] == 'f') and (relayCommand[2] == 'f')) {
         pinControl1State = HIGH;
         digitalWrite(pinControl1, pinControl1State); //Active = LOW; InActive = HIGH
+        isDefinedCommand = true;
        }
        else if ((relayCommand[0] == 'o') and (relayCommand[1] == 'n')) {
         pinControl1State = LOW;
         digitalWrite(pinControl1, pinControl1State); //Active = LOW; InActive = HIGH;
+        isDefinedCommand = true;
+       } else {
+        isDefinedCommand = false;
        }
-       sendOnetime1 = true;
-       isDefinedCommand = true;
     } else
     if (relayID[0] == '2') {
       if ((relayCommand[0] == 'o') and (relayCommand[1] == 'f') and (relayCommand[2] == 'f')) {
         pinControl2State = HIGH;
         digitalWrite(pinControl2, pinControl2State); //Active = LOW; InActive = HIGH        
+        isDefinedCommand = true;
        }
        else if ((relayCommand[0] == 'o') and (relayCommand[1] == 'n')) {
         pinControl2State = LOW;
         digitalWrite(pinControl2, pinControl2State); //Active = LOW; InActive = HIGH
+        isDefinedCommand = true;
+        } else {
+          isDefinedCommand = false;
        }
-       sendOnetime2 = true;
-       isDefinedCommand = true;
+
     } else
     if (relayID[0] == '3') {
       if ((relayCommand[0] == 'o') and (relayCommand[1] == 'f') and (relayCommand[2] == 'f')) {
         pinControl3State = HIGH;
         digitalWrite(pinControl3, pinControl3State); //Active = LOW; InActive = HIGH
+        isDefinedCommand = true;
        }
        else if ((relayCommand[0] == 'o') and (relayCommand[1] == 'n')) {
         pinControl3State = LOW;
         digitalWrite(pinControl3, pinControl3State); //Active = LOW; InActive = HIGH
+        isDefinedCommand = true;
        }
-       sendOnetime3 = true;
-       isDefinedCommand = true;
+       else {
+          isDefinedCommand = false;
+       }
     } else
     if (relayID[0] == '4') {
       if ((relayCommand[0] == 'o') and (relayCommand[1] == 'f') and (relayCommand[2] == 'f')) {
         pinControl4State = HIGH;
         digitalWrite(pinControl4, pinControl4State); //Active = LOW; InActive = HIGH
+        isDefinedCommand = true;
        }
        else if ((relayCommand[0] == 'o') and (relayCommand[1] == 'n')) {
         pinControl4State = LOW;
         digitalWrite(pinControl4, pinControl4State); //Active = LOW; InActive = HIGH
-       }
-       sendOnetime4 = true;
-       isDefinedCommand = true;
+        isDefinedCommand = true;
+       } else {
+          isDefinedCommand = false;
+       }       
     }    
     else {
       isDefinedCommand = false;
@@ -263,12 +269,17 @@ void callback(char* topic, byte* payload, unsigned int length) {
   isDefinedCommand = false;
   if (!isDefinedCommand) { isControlNode(subMsg); }
   if (!isDefinedCommand) {
-//      snprintf (pubMsg, 30, "COMMAND NOT FOUND"); //strtok(inputString,"#"));
-//      Serial.print("Message send: ");
-//      Serial.println(pubMsg);
-//      client.publish(pubTopicGen, pubMsg,true);
-    char temptCommand[] = "COMMAND NOT FOUND";
-    keepAlive(temptCommand);
+ char temptCommand[200] = "";
+      char breakedValue[150] = "";
+      int i = 0;
+      int countOfChar = 0;
+      //Remove All un-needed # command from received message
+      while (subMsg[i] != '#') {
+                breakedValue[i] = subMsg[i];
+                i++;
+      }     
+      snprintf (temptCommand, 200, "[%s]: NO SYNTAX FOUND", breakedValue);
+      keepAlive(temptCommand);
   }
 //----------END case 1.2 of NORMAL MODE -----------------------
 }
