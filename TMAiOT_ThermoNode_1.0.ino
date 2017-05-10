@@ -48,7 +48,7 @@ bool wifiReconnecting = false;
 bool factoryReset = false;
 char APssid[20] = "SePoLab"; //AP is ESP will connect
 char APpassword[20] = "tn17691510";
-char ssid[] = "WiFiNode"; // ESP in AP mode
+char ssid[] = "ThermoNode"; // ESP in AP mode
 char password[] = "password";
 WiFiClient espClient; //April23
 byte mac[6];
