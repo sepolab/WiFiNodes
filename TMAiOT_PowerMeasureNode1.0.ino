@@ -74,6 +74,9 @@ bool firstTime = true;
 //----------EnergyMonitor CONFIGURATION---------------
 EnergyMonitor emon1;  
 unsigned long previousMillis6 = 0;
+unsigned long previousMillis7 = 0;
+double Arms;
+unsigned long runnningDuration = 0;
 //----------ESP API in case using DTH21 CONFIGURATION---------------
 bool isDefinedCommand = true;
 bool simulatedDropedWifi = false;
@@ -99,23 +102,58 @@ void sendConfirmtoRetained (char inputString[]) {
 //2_AC Current
 //3_Voltage
 //------------------------------------
-void sendPowerMeasureIndex () {
+void sendPowerMeasureIndex (int intervalSample) {
   double Irms = emon1.calcIrms(1480);  // Calculate Irms only
-  double Prms = Irms*230.0;
+  double Prms = Irms*230.0/1000.0;
+  double Ainstant = 0.0;
+  double ArmsDisplay;
+  char str_Irms[6];
+  char str_Prms[8];
+  char str_Arms[8];
+    
   Serial.print("Prms = ");
   Serial.print(Prms);         // Apparent power
+  Serial.print("kW"); 
+  
   Serial.print("; Irms = ");
-  Serial.println(Irms);          // Irms
-  char str_Irms[6];
-  char str_Prms[10];
+  Serial.print(Irms);
+  Serial.print("A");
+
+  Ainstant = Prms * intervalSample / 3600.0;
+  Arms  = Arms + Ainstant;
+  Serial.print("; Energy = ");
+  
+    ArmsDisplay = Arms / 1000.0;
+    Serial.print(ArmsDisplay);
+    Serial.print("kWh");          // Energy
+    dtostrf(ArmsDisplay, 6, 2, str_Arms);
+  
+  Serial.print(" after ");
+  runnningDuration = round (millis() / 1000);
+  Serial.print(runnningDuration);
+  Serial.print("s");
+  
+  Serial.println ();
+  
   dtostrf(Irms, 4, 2, str_Irms);
   dtostrf(Prms, 8, 2, str_Prms);
-  char publishMessage [100] = "";
-  snprintf(publishMessage, 100, "{\"Prms\":\"%s\",\"Irms\":\"%s\",\"Vrms\":\"230\"}", str_Prms,str_Irms);
+
+  char publishMessage [150] = "";
+  snprintf(publishMessage, 150, "{\"Prms\":\"%s\",\"Pde\":\"W\",\"Irms\":\"%s\",\"Ide\":\"A\",\"Vrms\":\"230\",\"Vde\":\"V\"}", str_Prms,str_Irms);
   Serial.print("Message send: ");
   Serial.println(publishMessage);
   client.publish(pubTopicGen, publishMessage, true);
   
+  unsigned long currentMillis7 = millis();
+   if (currentMillis7 - previousMillis7 > 60000) {
+        previousMillis7 = currentMillis7;
+        unsigned long currentMillis7 = millis();
+        char publishMessage1 [120] = "";
+        snprintf(publishMessage1, 120, "{\"Energy\":\"%s\",\"Ede\":\"kWh\",\"Duration\":\"%i\",\"time\":\"seconds\"}", str_Arms,runnningDuration);
+        Serial.print("Message send: ");
+        Serial.println(publishMessage1);
+        client.publish(pubTopicGen, publishMessage1, true);
+  }
 }
 //-------------------------------------
 //keep-alive interval to update node status
@@ -218,7 +256,7 @@ void setup() {
   // put your setup code here, to run once:
   //
   Serial.begin(115200);
-  emon1.current(A0, 5);             // Current: input pin, calibration.
+  emon1.current(A0, 16);             // Current: input pin, calibration.
   //calibration is explained bellow
 //  if R burden = 22 for Irms max = 97 A => calibration = 91
 //  if R burden = 120 for Irms max = 19.5 A => calibration = 17
@@ -431,14 +469,14 @@ void loop() {
       unsigned long currentMillis3 = millis();
       unsigned long currentMillis6 = millis();
       
-      if (currentMillis6 - previousMillis6 > 1000) {
+      if (currentMillis6 - previousMillis6 > 2000) {
         previousMillis6 = currentMillis6;
         unsigned long currentMillis6 = millis();
         if (client.connected()) {
-          sendPowerMeasureIndex(); 
+          sendPowerMeasureIndex(2);
+          
         }
       }
-      
       if (currentMillis3 - previousMillis3 > publishInveral) {
         previousMillis3 = currentMillis3;
         unsigned long currentMillis4 = millis();
