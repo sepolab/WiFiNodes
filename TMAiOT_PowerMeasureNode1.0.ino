@@ -73,6 +73,7 @@ const long reconnectInveral = 10000;
 bool firstTime = true;
 //----------EnergyMonitor CONFIGURATION---------------
 EnergyMonitor emon1;  
+unsigned long previousMillis6 = 0;
 //----------ESP API in case using DTH21 CONFIGURATION---------------
 bool isDefinedCommand = true;
 bool simulatedDropedWifi = false;
@@ -105,9 +106,12 @@ void sendPowerMeasureIndex () {
   Serial.print(Prms);         // Apparent power
   Serial.print("; Irms = ");
   Serial.println(Irms);          // Irms
-  
+  char str_Irms[6];
+  char str_Prms[10];
+  dtostrf(Irms, 4, 2, str_Irms);
+  dtostrf(Prms, 8, 2, str_Prms);
   char publishMessage [100] = "";
-  snprintf(publishMessage, 100, "{\"Prms\":\"%s\",\"Irms\":\"%s\",\"Vrms\":\"230\"}", Prms,Irms);
+  snprintf(publishMessage, 100, "{\"Prms\":\"%s\",\"Irms\":\"%s\",\"Vrms\":\"230\"}", str_Prms,str_Irms);
   Serial.print("Message send: ");
   Serial.println(publishMessage);
   client.publish(pubTopicGen, publishMessage, true);
@@ -425,11 +429,20 @@ void loop() {
   //----STOP WI4341----------------------------------------------------
     if (checkWifi == true) {
       unsigned long currentMillis3 = millis();
+      unsigned long currentMillis6 = millis();
+      
+      if (currentMillis6 - previousMillis6 > 1000) {
+        previousMillis6 = currentMillis6;
+        unsigned long currentMillis6 = millis();
+        if (client.connected()) {
+          sendPowerMeasureIndex(); 
+        }
+      }
+      
       if (currentMillis3 - previousMillis3 > publishInveral) {
         previousMillis3 = currentMillis3;
         unsigned long currentMillis4 = millis();
         if (client.connected()) {
-          sendPowerMeasureIndex(); 
           char temptCommand[] = "Active";
           keepAlive(temptCommand);
       }
@@ -446,4 +459,3 @@ void loop() {
     setup_wifi();
   }
 }
-
