@@ -104,7 +104,7 @@ void sendConfirmtoRetained (char inputString[]) {
 //------------------------------------
 void sendPowerMeasureIndex (int intervalSample) {
   double Irms = emon1.calcIrms(1480);  // Calculate Irms only
-  double Prms = Irms*230.0/1000.0;
+  double Prms = Irms* 0.23;
   double Ainstant = 0.0;
   double ArmsDisplay;
   char str_Irms[6];
@@ -123,7 +123,7 @@ void sendPowerMeasureIndex (int intervalSample) {
   Arms  = Arms + Ainstant;
   Serial.print("; Energy = ");
   
-    ArmsDisplay = Arms / 1000.0;
+    ArmsDisplay = Arms;
     Serial.print(ArmsDisplay);
     Serial.print("kWh");          // Energy
     dtostrf(ArmsDisplay, 6, 2, str_Arms);
@@ -139,7 +139,7 @@ void sendPowerMeasureIndex (int intervalSample) {
   dtostrf(Prms, 8, 2, str_Prms);
 
   char publishMessage [150] = "";
-  snprintf(publishMessage, 150, "{\"Prms\":\"%s\",\"Pde\":\"W\",\"Irms\":\"%s\",\"Ide\":\"A\",\"Vrms\":\"230\",\"Vde\":\"V\"}", str_Prms,str_Irms);
+  snprintf(publishMessage, 150, "{\"Prms\":\"%s\",\"Pde\":\"kW\",\"Irms\":\"%s\",\"Ide\":\"A\",\"Vrms\":\"230\",\"Vde\":\"V\"}", str_Prms,str_Irms);
   Serial.print("Message send: ");
   Serial.println(publishMessage);
   client.publish(pubTopicGen, publishMessage, true);
