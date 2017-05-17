@@ -108,8 +108,8 @@ void sendPowerMeasureIndex (int intervalSample) {
   double Ainstant = 0.0;
   double ArmsDisplay;
   char str_Irms[6];
-  char str_Prms[8];
-  char str_Arms[8];
+  char str_Prms[9];
+  char str_Arms[9];
     
   Serial.print("Prms = ");
   Serial.print(Prms);         // Apparent power
@@ -123,10 +123,13 @@ void sendPowerMeasureIndex (int intervalSample) {
   Arms  = Arms + Ainstant;
   Serial.print("; Energy = ");
   
-    ArmsDisplay = Arms;
-    Serial.print(ArmsDisplay);
-    Serial.print("kWh");          // Energy
-    dtostrf(ArmsDisplay, 6, 2, str_Arms);
+  ArmsDisplay = Arms;
+  Serial.print(ArmsDisplay);
+  Serial.print("kWh");          // Energy
+  int d1 = ArmsDisplay;
+  float f2 = ArmsDisplay - d1;
+  int d2 = (f2 * 100);
+  snprintf (str_Arms, 9,"%d.%02d", d1, d2);
   
   Serial.print(" after ");
   runnningDuration = round (millis() / 1000);
@@ -134,12 +137,19 @@ void sendPowerMeasureIndex (int intervalSample) {
   Serial.print("s");
   
   Serial.println ();
-  
-  dtostrf(Irms, 4, 2, str_Irms);
-  dtostrf(Prms, 8, 2, str_Prms);
+
+  d1 = Irms;
+  f2 = Irms - d1;
+  d2 = (f2 * 100);
+  snprintf (str_Irms, 6,"%d.%02d", d1, d2);
+
+  d1 = Prms;
+  f2 = Prms - d1;
+  d2 = (f2 * 100);
+  snprintf (str_Prms, 9,"%d.%02d", d1, d2);
 
   char publishMessage [150] = "";
-  snprintf(publishMessage, 150, "{\"Prms\":\"%s\",\"Pde\":\"kW\",\"Irms\":\"%s\",\"Ide\":\"A\",\"Vrms\":\"230\",\"Vde\":\"V\"}", str_Prms,str_Irms);
+  snprintf(publishMessage, 150, "{\"Prms\":\"%s\",\"Pde\":\"kW\",\"Irms\":\"%s\",\"Ide\":\"A\",\"Vrms\":\"230\",\"Vde\":\"V\"}", str_Prms, str_Irms);
   Serial.print("Message send: ");
   Serial.println(publishMessage);
   client.publish(pubTopicGen, publishMessage, true);
