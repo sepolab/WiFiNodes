@@ -9,6 +9,7 @@
 #include "math.h"
 
 IRsend irsend(13); //an IR led is connected to GPIO pin 13 -D7
+//JSON: {"DeviceType":"AC","Brand":"Daikin","State":"On","Mode":"Cool","Temp":"25","Fan":"Med","Swing":"n"}
 //Example signals from various Toshiba AC units (very long signals)
 const unsigned int AC_Toshiba_irSignalOpenAt27FullFan[] PROGMEM = {4372,4364,540,1628,532,1632,528,1628,532,1628,532,548,532,548,584,1580,532,544,588,492,536,544,532,548,536,548,532,1624,536,1628,584,496,532,1632,528,556,524,548,532,552,532,552,524,548,536,544,536,1624,588,1572,536,1624,536,1632,532,1624,532,1632,528,1628,536,1624,536,548,532,548,584,496,532,552,528,548,532,548,532,548,532,552,528,556,524,1632,532,1624,536,548,528,1628,536,548,532,548,532,548,532,600,480,548,584,1576,532,1628,532,552,528,552,532,548,532,548,580,500,532,1624,536,548,532,548,532,548,532,548,532,552,528,580,504,616,460,548,536,576,500,1636,528,1628,532,548,532,548,532,548,584,520,508,548,532,7468,4372,4368,536,1628,532,1632,532,1624,536,1628,532,548,532,600,480,1636,524,552,528,548,532,600,480,548,536,552,524,1628,536,1624,584,500,532,1628,532,552,528,548,532,548,532,572,512,552,524,548,532,1680,480,1628,536,1632,528,1624,536,1628,532,1628,532,1628,532,1628,536,552,528,548,580,500,532,552,528,552,528,548,532,552,528,548,532,548,532,1628,532,1628,536,548,532,1624,536,552,528,552,580,496,532,572,508,548,588,1572,532,1628,532,548,536,544,536,620,460,548,580,500,532,1628,532,600,480,548,532,600,480,552,528,548,536,544,532,620,460,548,532,548,584,1580,532,1628,532,580,500,620,460,548,584,500,532,616,460};
 const unsigned int AC_Toshiba_irSignalCloseAt27FullFan[] PROGMEM = {4396,4340,540,1628,532,1624,536,1624,536,1628,532,552,532,548,528,1632,532,548,532,544,536,548,532,548,532,544,536,1624,536,1628,532,548,540,1620,532,548,532,580,500,552,528,552,528,552,532,548,532,1624,532,1636,528,1624,536,1628,532,1628,536,1628,532,1628,528,1632,532,572,508,548,532,548,532,548,532,548,532,548,532,552,528,548,532,548,532,1632,532,1624,536,552,524,1628,536,572,508,552,528,552,528,548,532,552,528,1628,536,1628,528,548,536,544,536,544,536,1624,536,1628,532,1628,532,548,532,572,512,548,532,548,532,548,532,544,536,548,532,548,532,548,532,1624,536,1628,532,552,528,556,524,1632,528,1628,536,552,528,7468,4396,4340,540,1628,532,1624,536,1628,532,1632,532,544,532,556,528,1628,532,552,528,548,528,548,536,552,528,548,532,1624,536,1628,532,548,532,1632,528,548,532,548,532,552,532,568,512,544,536,548,532,1628,532,1628,532,1628,536,1624,536,1624,536,1628,528,1632,532,1628,532,548,532,548,532,552,528,552,528,552,528,548,536,544,532,548,536,548,532,1628,532,1624,536,548,532,1628,532,548,532,548,532,580,504,544,532,552,528,1632,528,1632,532,548,532,548,532,548,532,1628,532,1628,536,1624,532,552,532,548,532,552,524,552,532,548,532,552,528,552,528,548,532,548,532,1628,532,1628,532,552,528,548,536,1624,536,1628,532,572,508};
@@ -811,7 +812,7 @@ bool readReceivedMsgInWFJson (char inputString[]) {
 //PROCEDURE: PARSING DATA OF RECEIVED MESSAGE IN AC JSON FORMAT WITH AC SYNTAX
 //------------------------------------------------------------
 //PROCESS BY DATE:
-// JUL22,2016: CREATED DATE - JSON SYNTAX LOOKS LIKE = {"DeviceType":"AC/WF","ID":"Toshiba","state":"on","mode":"cool","temp":"27","fan":"max","swing":"n"}
+// MAY 24,207: CREATED DATE - JSON SYNTAX LOOKS LIKE = {"DeviceType":"AC","Brand":"Daikin","State":"On","Mode":"Cool","Temp":"25","Fan":"Med","Swing":"n"}
 //    
 // 
 //------------------------------------------------------------
@@ -846,12 +847,11 @@ bool readReceivedMsgInACJson (char inputString[]) {
 bool readReceivedMsgInJson (char inputString[]) {
   DynamicJsonBuffer  jsonBuffer;
   JsonObject& root = jsonBuffer.parseObject(inputString);
-
   // Test if parsing succeeds.
   if (!root.success()) {
     Serial.println("parseObject() failed");
     return false;
-  }
+  } else {
   // Fetch values.
     snprintf(ID, 20, root["Brand"]);
     snprintf(DeviceType, 5, root["DeviceType"]);
@@ -862,6 +862,7 @@ bool readReceivedMsgInJson (char inputString[]) {
     Serial.print("DeviceType:"); Serial.println(DeviceType);
 
     return true;
+  }
 }
 //-------------------END PROCEDURE------------------------------
 //------------------------------------------------------------
@@ -870,7 +871,7 @@ bool readReceivedMsgInJson (char inputString[]) {
 //PROCESS BY DATE:
 // JUL22,2016: CREATED DATE
 // the general received message will following format:
-// {"DeviceType":"<kind>","Brand":"","state":"on","mode":"cool","temp":"27","fan":"max","swing":"n"}
+// {"DeviceType":"AC","Brand":"Daikin","State":"On","Mode":"Cool","Temp":"25","Fan":"Med","Swing":"n"}
 // Required Parameter: "DeviceType", "Brand", "state"
 // Optional Parameter for AC: mode, temp, fan, swing
 // Optional Parameter for WF: command
@@ -910,7 +911,7 @@ void isControlNode(char inputString[]) {
   int i = 0;
   int j = 0;
   int countOfChar = 0;
-  Serial.println(inputString);
+
   //Remove All un-needed # command from received message
   while (inputString[i] != '#') {
                 breakedValue[i] = inputString[i];
@@ -918,18 +919,17 @@ void isControlNode(char inputString[]) {
                 breakedValue2[i] = inputString[i];
                 i++;
   }
-
   //call parse data from payload under JSON
+
   readReceivedMsgInJson(breakedValue);
   //Checking the device is AC or WF or else to break other JSON parameters following kinds
   
   if ((DeviceType[0] == 'A') and (DeviceType[1] == 'C')) {
-    Serial.println(breakedValue1);
     readReceivedMsgInACJson(breakedValue1);
     if ((ACstate[0] == 'O') and (ACstate[1] == 'n')) {
       Serial.println(breakedValue1);
       adjustAC();
-    } 
+    }
     else if ((ACstate[0] == 'O') and (ACstate[1] == 'f') and (ACstate[2] == 'f')) {
       sendRAW_Flash(AC_Toshiba_irSignalCloseAt27FullFan, sizeof(AC_Toshiba_irSignalCloseAt27FullFan)/sizeof(int),38);
       isDefinedCommand = true;
