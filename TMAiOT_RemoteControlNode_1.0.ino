@@ -7,9 +7,10 @@
 #include <FS.h>
 #include <PubSubClient.h> //April23
 #include "math.h"
+#include <IRDaikinESP.h>
 
+IRDaikinESP dakinir(D7);
 IRsend irsend(13); //an IR led is connected to GPIO pin 13 -D7
-//JSON: {"DeviceType":"AC","Brand":"Daikin","State":"On","Mode":"Cool","Temp":"25","Fan":"Med","Swing":"n"}
 //Example signals from various Toshiba AC units (very long signals)
 const unsigned int AC_Toshiba_irSignalOpenAt27FullFan[] PROGMEM = {4372,4364,540,1628,532,1632,528,1628,532,1628,532,548,532,548,584,1580,532,544,588,492,536,544,532,548,536,548,532,1624,536,1628,584,496,532,1632,528,556,524,548,532,552,532,552,524,548,536,544,536,1624,588,1572,536,1624,536,1632,532,1624,532,1632,528,1628,536,1624,536,548,532,548,584,496,532,552,528,548,532,548,532,548,532,552,528,556,524,1632,532,1624,536,548,528,1628,536,548,532,548,532,548,532,600,480,548,584,1576,532,1628,532,552,528,552,532,548,532,548,580,500,532,1624,536,548,532,548,532,548,532,548,532,552,528,580,504,616,460,548,536,576,500,1636,528,1628,532,548,532,548,532,548,584,520,508,548,532,7468,4372,4368,536,1628,532,1632,532,1624,536,1628,532,548,532,600,480,1636,524,552,528,548,532,600,480,548,536,552,524,1628,536,1624,584,500,532,1628,532,552,528,548,532,548,532,572,512,552,524,548,532,1680,480,1628,536,1632,528,1624,536,1628,532,1628,532,1628,532,1628,536,552,528,548,580,500,532,552,528,552,528,548,532,552,528,548,532,548,532,1628,532,1628,536,548,532,1624,536,552,528,552,580,496,532,572,508,548,588,1572,532,1628,532,548,536,544,536,620,460,548,580,500,532,1628,532,600,480,548,532,600,480,552,528,548,536,544,532,620,460,548,532,548,584,1580,532,1628,532,580,500,620,460,548,584,500,532,616,460};
 const unsigned int AC_Toshiba_irSignalCloseAt27FullFan[] PROGMEM = {4396,4340,540,1628,532,1624,536,1624,536,1628,532,552,532,548,528,1632,532,548,532,544,536,548,532,548,532,544,536,1624,536,1628,532,548,540,1620,532,548,532,580,500,552,528,552,528,552,532,548,532,1624,532,1636,528,1624,536,1628,532,1628,536,1628,532,1628,528,1632,532,572,508,548,532,548,532,548,532,548,532,548,532,552,528,548,532,548,532,1632,532,1624,536,552,524,1628,536,572,508,552,528,552,528,548,532,552,528,1628,536,1628,528,548,536,544,536,544,536,1624,536,1628,532,1628,532,548,532,572,512,548,532,548,532,548,532,544,536,548,532,548,532,548,532,1624,536,1628,532,552,528,556,524,1632,528,1628,536,552,528,7468,4396,4340,540,1628,532,1624,536,1628,532,1632,532,544,532,556,528,1628,532,552,528,548,528,548,536,552,528,548,532,1624,536,1628,532,548,532,1632,528,548,532,548,532,552,532,568,512,544,536,548,532,1628,532,1628,532,1628,536,1624,536,1624,536,1628,528,1632,532,1628,532,548,532,548,532,552,528,552,528,552,528,548,536,544,532,548,536,548,532,1628,532,1624,536,548,532,1628,532,548,532,548,532,580,504,544,532,552,528,1632,528,1632,532,548,532,548,532,548,532,1628,532,1628,536,1624,532,552,532,548,532,552,524,552,532,548,532,552,528,552,528,548,532,548,532,1628,532,1628,532,552,528,548,536,1624,536,1628,532,572,508};
@@ -239,6 +240,37 @@ void ledBlink() {
 //PROCESS BY DATE:
 // JUL22,2016: 
 //    
+//------------------------------------------------------------
+bool convertToWFVariableName(char brand[],char comm[]) {
+  bool isValid = true;
+  char bufB[3] = "00";
+  if ((brand[0] == 'M') and (brand[1] == 'i') and (brand[2] == 't') and (brand[3] == 's') and (brand[4] == 'h') and (brand[5] == 'u') and (brand[6] == 'b'))
+    {snprintf(bufB, 3,"Mi");}
+  else if ((brand[0] == 'P') and (brand[1] == 'a') and (brand[2] == 'n') and (brand[3] == 'a') and (brand[4] == 's') and (brand[5] == 'o') and (brand[6] == 'n') and (brand[7] == 'i') and (brand[8] == 'c'))
+    {snprintf(bufB, 3,"Pa");}
+  else if ((brand[0] == 'D') and (brand[1] == 'a') and (brand[2] == 'i') and (brand[3] == 'k') and (brand[4] == 'i') and (brand[5] == 'n'))
+    {snprintf(bufB, 3,"Da");}
+  else {isValid == false;}
+
+  char bufC[3] = "00";
+  if ((comm[0] == 'p') and (comm[1] == 'o') and (comm[2] == 'w') and (comm[3] == 'e') and (comm[4] == 'r')) {snprintf(bufC, 3,"Po");}
+  else if ((comm[0] == 's') and (comm[1] == 'p') and (comm[2] == 'e') and (comm[3] == 'e') and (comm[4] == 'd')) {snprintf(bufC, 3,"Sp");}
+  else if ((comm[0] == 'o') and (comm[1] == 's') and (comm[2] == 'c') and (comm[3] == 'i') and (comm[4] == 'l')) {snprintf(bufC, 3,"Os");}
+  else if ((comm[0] == 't') and (comm[1] == 'i') and (comm[2] == 'm') and (comm[3] == 'e') and (comm[4] == 'r')) {snprintf(bufC, 3,"Ti");}
+  else if ((comm[0] == 'r') and (comm[1] == 'h') and (comm[2] == 'y') and (comm[3] == 't') and (comm[4] == 'h')) {snprintf(bufC, 3,"Rh");}
+  else {isValid == false;}
+
+  if (isValid) {
+    snprintf(finResult, 7,"WF%s%s",bufB,bufC);
+    Serial.print("Covert to variable Name: ");Serial.println(finResult);
+    return true;
+    isDefinedCommand = true;
+  } else {
+    return false;
+    snprintf(finResult, 7,"failed");
+    isDefinedCommand = false;
+  }
+}
 void adjustWF() {
 //  if (readReceivedMsgInWFJson(breakedValue)) { // PARSE DATA SUCCESSFULLY
       if (convertToWFVariableName(WFID,WFCommand)) {
@@ -727,36 +759,6 @@ bool convertToACVariableName(char brand[],char Mode[],char temperature[], char f
 //    
 // 
 //------------------------------------------------------------
-bool convertToWFVariableName(char brand[],char comm[]) {
-  bool isValid = true;
-  char bufB[3] = "00";
-  if ((brand[0] == 'M') and (brand[1] == 'i') and (brand[2] == 't') and (brand[3] == 's') and (brand[4] == 'h') and (brand[5] == 'u') and (brand[6] == 'b'))
-    {snprintf(bufB, 3,"Mi");}
-  else if ((brand[0] == 'P') and (brand[1] == 'a') and (brand[2] == 'n') and (brand[3] == 'a') and (brand[4] == 's') and (brand[5] == 'o') and (brand[6] == 'n') and (brand[7] == 'i') and (brand[8] == 'c'))
-    {snprintf(bufB, 3,"Pa");}
-  else if ((brand[0] == 'D') and (brand[1] == 'a') and (brand[2] == 'i') and (brand[3] == 'k') and (brand[4] == 'i') and (brand[5] == 'n'))
-    {snprintf(bufB, 3,"Da");}
-  else {isValid == false;}
-
-  char bufC[3] = "00";
-  if ((comm[0] == 'p') and (comm[1] == 'o') and (comm[2] == 'w') and (comm[3] == 'e') and (comm[4] == 'r')) {snprintf(bufC, 3,"Po");}
-  else if ((comm[0] == 's') and (comm[1] == 'p') and (comm[2] == 'e') and (comm[3] == 'e') and (comm[4] == 'd')) {snprintf(bufC, 3,"Sp");}
-  else if ((comm[0] == 'o') and (comm[1] == 's') and (comm[2] == 'c') and (comm[3] == 'i') and (comm[4] == 'l')) {snprintf(bufC, 3,"Os");}
-  else if ((comm[0] == 't') and (comm[1] == 'i') and (comm[2] == 'm') and (comm[3] == 'e') and (comm[4] == 'r')) {snprintf(bufC, 3,"Ti");}
-  else if ((comm[0] == 'r') and (comm[1] == 'h') and (comm[2] == 'y') and (comm[3] == 't') and (comm[4] == 'h')) {snprintf(bufC, 3,"Rh");}
-  else {isValid == false;}
-
-  if (isValid) {
-    snprintf(finResult, 7,"WF%s%s",bufB,bufC);
-    Serial.print("Covert to variable Name: ");Serial.println(finResult);
-    return true;
-    isDefinedCommand = true;
-  } else {
-    return false;
-    snprintf(finResult, 7,"failed");
-    isDefinedCommand = false;
-  }
-}
 //-------------------END PROCEDURE------------------------------
 //------------------------------------------------------------
 //PROCEDURE: EMIT DATA FROM FLASH TO IR PIN
@@ -812,7 +814,7 @@ bool readReceivedMsgInWFJson (char inputString[]) {
 //PROCEDURE: PARSING DATA OF RECEIVED MESSAGE IN AC JSON FORMAT WITH AC SYNTAX
 //------------------------------------------------------------
 //PROCESS BY DATE:
-// MAY 24,207: CREATED DATE - JSON SYNTAX LOOKS LIKE = {"DeviceType":"AC","Brand":"Daikin","State":"On","Mode":"Cool","Temp":"25","Fan":"Med","Swing":"n"}
+// JUL22,2016: CREATED DATE - JSON SYNTAX LOOKS LIKE = {"DeviceType":"AC/WF","ID":"Toshiba","state":"on","mode":"cool","temp":"27","fan":"max","swing":"n"}
 //    
 // 
 //------------------------------------------------------------
@@ -847,6 +849,7 @@ bool readReceivedMsgInACJson (char inputString[]) {
 bool readReceivedMsgInJson (char inputString[]) {
   DynamicJsonBuffer  jsonBuffer;
   JsonObject& root = jsonBuffer.parseObject(inputString);
+  Serial.println ("JsonObject root");
   // Test if parsing succeeds.
   if (!root.success()) {
     Serial.println("parseObject() failed");
@@ -871,7 +874,7 @@ bool readReceivedMsgInJson (char inputString[]) {
 //PROCESS BY DATE:
 // JUL22,2016: CREATED DATE
 // the general received message will following format:
-// {"DeviceType":"AC","Brand":"Daikin","State":"On","Mode":"Cool","Temp":"25","Fan":"Med","Swing":"n"}
+// {"DeviceType":"<kind>","Brand":"","state":"on","mode":"cool","temp":"27","fan":"max","swing":"n"}
 // Required Parameter: "DeviceType", "Brand", "state"
 // Optional Parameter for AC: mode, temp, fan, swing
 // Optional Parameter for WF: command
@@ -884,7 +887,58 @@ void sendConfirmtoRetained (char inputString[]) {
   Serial.println(inputString);
   client.publish(pubTopicGen, inputString, true);
 }
+void adjustDaikinAC() {
 
+  //STATE ON or OFF
+  if (ACstate[0] == 'O' and ACstate[1] == 'n') { dakinir.on();} 
+  else if (ACstate[0] == 'O' and ACstate[1] == 'f' and ACstate[2] == 'f') { dakinir.off();} 
+
+  //set Mode
+  if (ACmode[0] == 'C' and ACmode[1] == 'o' and ACmode[2] == 'o' and ACmode[3] == 'l') {
+    dakinir.setMode(DAIKIN_COOL);
+  } else
+  if (ACmode[0] == 'H' and ACmode[1] == 'e' and ACmode[2] == 'a' and ACmode[3] == 't') {
+    dakinir.setMode(DAIKIN_HEAT);
+  } else
+  if (ACmode[0] == 'F' and ACmode[1] == 'a' and ACmode[2] == 'n') {
+    dakinir.setMode(DAIKIN_FAN);
+  } else
+  if (ACmode[0] == 'A' and ACmode[1] == 'u' and ACmode[2] == 'y' and ACmode[3] == 'o') {
+    dakinir.setMode(DAIKIN_AUTO);
+  } else
+  if (ACmode[0] == 'D' and ACmode[1] == 'r' and ACmode[2] == 'y') {
+    dakinir.setMode(DAIKIN_DRY);
+  }
+
+  //Set FAN
+  if (ACfan[0] == 'M' and ACfan[1] == 'a' and ACfan[2] == 'x') {
+    dakinir.setFan(5);
+  } else
+  if (ACfan[0] == 'M' and ACfan[1] == 'e' and ACfan[2] == 'd') {
+    dakinir.setFan(3);
+  } else
+  if (ACfan[0] == 'M' and ACfan[1] == 'i' and ACfan[2] == 'n') {
+    dakinir.setFan(1);
+  } else
+  if (ACfan[0] == 'A' and ACfan[1] == 'u' and ACfan[2] == 't') {
+    dakinir.setFan(0);
+  } else
+
+  //Set SWING  VERTICAL
+  if (ACswing[0] == 'y' and ACswing[1] == 'e' and ACswing[2] == 's') {
+    dakinir.setSwingVertical(1);
+  } else
+  if (ACswing[0] == 'n' and ACswing[1] == 'o') {
+    dakinir.setSwingVertical(0);
+  }
+
+  //set Temp
+  int temptACTemp = (ACtemp[0] - '0') * 10 + (ACtemp[1] - '0');
+  Serial.println(temptACTemp);
+  dakinir.setTemp(temptACTemp);
+
+  dakinir.send();
+}
 //-------------------------------------
 //keep-alive interval to update node status
 //There is 2 states of interval
@@ -901,7 +955,6 @@ void keepAlive (char inputString[]) {
   client.publish(keepAliveTopic, publishMessage, true);
 }
 //------------------------------------
-
 void isControlNode(char inputString[]) {
   char breakedValue[150] = "";
   char breakedValue1[150] = "";
@@ -920,19 +973,20 @@ void isControlNode(char inputString[]) {
                 i++;
   }
   //call parse data from payload under JSON
-
+  Serial.println(breakedValue);
   readReceivedMsgInJson(breakedValue);
   //Checking the device is AC or WF or else to break other JSON parameters following kinds
+  Serial.println(breakedValue1);
   
   if ((DeviceType[0] == 'A') and (DeviceType[1] == 'C')) {
+    Serial.println(breakedValue1);
     readReceivedMsgInACJson(breakedValue1);
-    if ((ACstate[0] == 'O') and (ACstate[1] == 'n')) {
-      Serial.println(breakedValue1);
+    if ((ACID[0] == 'D') and (ACID[1] == 'a') and (ACID[2] == 'i') and (ACID[3] == 'k')and (ACID[4] == 'i') and (ACID[5] == 'n')) {
+      adjustDaikinAC();
+    } 
+    else if ((ACID[0] == 'T') and (ACID[1] == 'o') and (ACID[2] == 's') and (ACID[3] == 'h')and (ACID[4] == 'i') and (ACID[5] == 'b')) {
       adjustAC();
-    }
-    else if ((ACstate[0] == 'O') and (ACstate[1] == 'f') and (ACstate[2] == 'f')) {
-      sendRAW_Flash(AC_Toshiba_irSignalCloseAt27FullFan, sizeof(AC_Toshiba_irSignalCloseAt27FullFan)/sizeof(int),38);
-      isDefinedCommand = true;
+//      adjustToshibaAC();
     }
     sendConfirmtoRetained(breakedValue2);
   } else if ((DeviceType[0] == 'W') and (DeviceType[1] == 'F')) {
@@ -1033,6 +1087,7 @@ void setup_wifi() {
 void setup() {
   //insert your own setup code here
     irsend.begin();
+    dakinir.begin();
     Serial.begin(115200);
     pinMode(ledPin, OUTPUT);
     ledState = LOW;
