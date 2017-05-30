@@ -1,3 +1,12 @@
+/**
+  TMAiOT SMART OFFICE PROJECT
+  Name: TMAiOT_ThermoNode
+  Purpose: Tracking Temperature and Humidity and send to MQTT Broker
+
+  @author Tri Nguyen nductri@tma.com.vn
+  @version 1.0 6/15/17
+*/
+
 #include <Adafruit_Sensor.h>
 #include <DHT.h>
 #include <DHT_U.h>
@@ -93,12 +102,18 @@ bool simulatedDropedWifi = false;
 ////--------END VAR=-----------------------------------------------
 
 //------------------------------------------------
-//void API for cloud command
 
-//void DTH will track sensor index
+  /**
+  Read DHT22 sensor
+
+  @param nope
+  @return bufHum, bufTemp, bufHeatIndex
+  @version 1.0
+  @author Tri Nguyen
+  @date June12017
+
+*/
 void DTHCalculation() {
-  // Reading temperature or humidity takes about 250 milliseconds!
-  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
   sensors_event_t event;  
   dht.humidity().getEvent(&event);
   float humidity = event.relative_humidity;
@@ -127,22 +142,37 @@ void DTHCalculation() {
     snprintf (bufHeatIndex, 9,"%d.%01d", d1, d2);
   }
 }
-//---------------
-//SendConfirm () will send feedback to MQTT to confirm the command 
-//---------------
+
+  /**
+  Send Confirmation to broker as same as payloaf for retained
+
+  @param char[] payload
+  @return nope
+  @version 1.0
+  @author Tri Nguyen
+  @date June12017
+
+*/
 void sendConfirmtoRetained (char inputString[]) {
   firstTime = false;
   Serial.print("Message send: ");
   Serial.println(inputString);
   client.publish(pubTopicGen, inputString, true);
 }
-//-------------------------------------
-//sendThermoIndex to update node status
-//There is 2 states of interval
+
+  /**
+  send Thermo Index to update broker
+
+  @param nope
+  @return 
 //1_Termperature
 //2_Humid
 //3_feelike
-//------------------------------------
+  @version 1.0
+  @author Tri Nguyen
+  @date June12017
+
+*/
 void sendThermoIndex () {
   //-----TEMPERATURE PUT----BEGIN-----
         firstTime = false;
@@ -159,12 +189,19 @@ void sendThermoIndex () {
         Serial.println(publishMessage);
         client.publish(pubTopicGen, publishMessage, true);
 }
-//-------------------------------------
-//keep-alive interval to update node status
-//There is 2 states of interval
-//1_active when ping frequently
-//2_reconnecting when re-connect
-//------------------------------------
+
+/**
+keep-alive interval to update node status. There is 2 states of interval
+1_active when ping frequently
+2_reconnecting when re-connect
+  @param char [] payload
+  @return nope
+
+  @version 1.0
+  @author Tri Nguyen
+  @date June12017
+
+*/
 void keepAlive (char inputString[]) {
   char publishMessage [100] = "";
   snprintf(publishMessage, 100, "{\"NodeMacAddress\":\"%02X:%02X:%02X:%02X:%02X:%02X\",\"State\":\"%s\"}",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5], inputString);
@@ -182,6 +219,23 @@ void keepAlive (char inputString[]) {
 //payload - the message payload (byte array)
 //length - the length of the message payload (unsigned int)
 //-----------------------------------
+
+/**
+callback use to read payload of subcribe topic
+If the client is used to subscribe to topics, a callback function must be provided in the constructor.
+This function is called when new messages arrive at the client.
+
+  @param:
+    topic - the topic the message arrived on (const char[])
+    payload - the message payload (byte array)
+    length - the length of the message payload (unsigned int)
+  @return nope
+
+  @version 1.0
+  @author Tri Nguyen
+  @date June12017
+
+*/
 void callback(char* topic, byte* payload, unsigned int length) {
   for (int i = 0; i < 30; i++) {
     subMsg[i] = '#';
@@ -215,13 +269,31 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
 //----------END case 1.2 of NORMAL MODE -----------------------
 }
+/**
+callback notifying us of the need to save config
+  @param: nope
+  @return nope
 
-//callback notifying us of the need to save config
+  @version 1.0
+  @author Tri Nguyen
+  @date June12017
+
+*/
 void saveConfigCallback () {
   Serial.println("Should save config");
   shouldSaveConfig = true;
 }
 
+/**
+setup_wifi to config wifi after user change setup
+  @param: nope
+  @return nope
+
+  @version 1.0
+  @author Tri Nguyen
+  @date June12017
+
+*/
 void setup_wifi() {
   delay(10);
   // We start by connecting to a WiFi network
@@ -230,7 +302,16 @@ void setup_wifi() {
   Serial.println(APssid);
   WiFi.begin(APssid, APpassword);
 }
+/**
+recoonect to check wifi status and mqtt connection to avoid send message when network is down
+  @param: nope
+  @return nope
 
+  @version 1.0
+  @author Tri Nguyen
+  @date June12017
+
+*/
 void reconnect() {
   // Loop until we're reconnected
   //  while (!client.connected()) {
