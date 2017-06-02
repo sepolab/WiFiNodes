@@ -1,3 +1,20 @@
+/**
+  TMAiOT SMART OFFICE PROJECT
+  Name: TMAiOT_RelayNode
+  Purpose: control AC Devices via MQTT Broker
+  COMMAND = {"Relay":"1/2/3/4","Action":"on/off"}
+  ESP PIN LAYOUT
+ SOFT RESET BUTTON: GPIO 0 => use to reset WiFi or MQTT server connection
+ LED INDICATER: GPIO 1 => use to inform status of Connection
+ SWITCH 1 CONTROL PIN: GPIO 14
+ SWITCH 2 CONTROL PIN: GPIO 12
+ SWITCH 3 CONTROL PIN: GPIO 13
+ SWITCH 4 CONTROL PIN: GPIO 15
+ 
+  @author Tri Nguyen nductri@tma.com.vn
+  @version 1.0 6/15/17
+*/
+
 #include <WiFiManager.h>
 #include <ESP8266WiFi.h>          //https://github.com/esp8266/Arduino
 #include <DNSServer.h>
@@ -6,17 +23,7 @@
 #include <FS.h>
 #include <PubSubClient.h> //April23
 #include "math.h"
-//-------------------------------
-//ESP PIN LAYOUT
-// SOFT RESET BUTTON: GPIO 0 => use to reset WiFi or MQTT server connection
-// LED INDICATER: GPIO 1 => use to inform status of Connection
-// SWITCH 1 CONTROL PIN: GPIO 14
-// SWITCH 2 CONTROL PIN: GPIO 12
-// SWITCH 3 CONTROL PIN: GPIO 13
-// SWITCH 4 CONTROL PIN: GPIO 15
-// Current sensor read I2C
-// PUBLISH to Trihome/indoor/bedroom1/sub
-//  COMMAND = {"Relay":"1/2/3/4","Action":"on/off"}
+
 //---------SOFT RESET BUTTON PARAMETERS---------------------
 const int SOFT_RST_PIN =  0;      // SOFT RESET button is map to port 0
 int buttonState;             // the current reading from the input pin
@@ -109,7 +116,14 @@ int pinControl4State = HIGH;
 // Optional Parameter for WF: command
 //------------------------------------------------------------
 
-
+  /**
+  Read readReceivedMsgInJson
+  @param inputString: it is char[] that content all payload of sending message in JSON format
+  @return relayID: contain Relay info, relayCommand: contain relay state
+  @version 1.0
+  @author Tri Nguyen
+  @date June12017
+*/
 bool readReceivedMsgInJson (char inputString[]) {
   DynamicJsonBuffer  jsonBuffer;
   JsonObject& root = jsonBuffer.parseObject(inputString);
@@ -129,6 +143,15 @@ bool readReceivedMsgInJson (char inputString[]) {
     Serial.print(" ; Received Command:"); Serial.println(relayCommand);
     return true;
 }
+
+  /**
+  Read isControlNode
+  @param inputString: it is char[] that content all payload of received message in JSON format
+  @return action to output pins
+  @version 1.0
+  @author Tri Nguyen
+  @date June12017
+*/
 
 void isControlNode(char inputString[]) {
   char breakedValue[150] = "";
@@ -214,11 +237,14 @@ void isControlNode(char inputString[]) {
     isDefinedCommand = false;
   }
 }
-//---------------------
-
-//---------------
-//SendConfirm () will send feedback to MQTT to confirm the command 
-//---------------
+  /**
+  Send Confirmation to broker as same as payloaf for retained
+  @param char[] payload
+  @return nope
+  @version 1.0
+  @author Tri Nguyen
+  @date June12017
+*/
 void sendConfirmtoRetained (char inputString[]) {
   firstTime = false;
   Serial.print("Message send: ");
@@ -226,12 +252,16 @@ void sendConfirmtoRetained (char inputString[]) {
   client.publish(pubTopicGen, inputString, true);
 }
 
-//-------------------------------------
-//keep-alive interval to update node status
-//There is 2 states of interval
-//1_active when ping frequently
-//2_reconnecting when re-connect
-//------------------------------------
+/**
+keep-alive interval to update node status. There is 2 states of interval
+1_active when ping frequently
+2_reconnecting when re-connect
+  @param char [] payload
+  @return nope
+  @version 1.0
+  @author Tri Nguyen
+  @date June12017
+*/
 void keepAlive (char inputString[]) {
   char publishMessage [100] = "";
   snprintf(publishMessage, 100, "{\"NodeMacAddress\":\"%02X:%02X:%02X:%02X:%02X:%02X\",\"State\":\"%s\"}",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5], inputString);
@@ -242,14 +272,19 @@ void keepAlive (char inputString[]) {
   client.publish(keepAliveTopic, publishMessage, true);
 }
 
-//-------- END case 1.2 if NORMAL MODE-------------------------
-//-----void callback description----
-//If the client is used to subscribe to topics, a callback function must be provided in the constructor.
-//This function is called when new messages arrive at the client.
-//topic - the topic the message arrived on (const char[])
-//payload - the message payload (byte array)
-//length - the length of the message payload (unsigned int)
-//-----------------------------------
+/**
+callback use to read payload of subcribe topic
+If the client is used to subscribe to topics, a callback function must be provided in the constructor.
+This function is called when new messages arrive at the client.
+  @param:
+    topic - the topic the message arrived on (const char[])
+    payload - the message payload (byte array)
+    length - the length of the message payload (unsigned int)
+  @return nope
+  @version 1.0
+  @author Tri Nguyen
+  @date June12017
+*/
 void callback(char* topic, byte* payload, unsigned int length) {
   for (int i = 0; i < 150; i++) {
     subMsg[i] = '#';
@@ -284,12 +319,28 @@ void callback(char* topic, byte* payload, unsigned int length) {
 //----------END case 1.2 of NORMAL MODE -----------------------
 }
 
-//callback notifying us of the need to save config
+/**
+callback notifying us of the need to save config
+  @param: nope
+  @return nope
+  @version 1.0
+  @author Tri Nguyen
+  @date June12017
+*/
 void saveConfigCallback () {
   Serial.println("Should save config");
   shouldSaveConfig = true;
 }
 
+
+/**
+setup_wifi to config wifi after user change setup
+  @param: nope
+  @return nope
+  @version 1.0
+  @author Tri Nguyen
+  @date June12017
+*/
 void setup_wifi() {
   delay(10);
   // We start by connecting to a WiFi network
@@ -298,7 +349,14 @@ void setup_wifi() {
   Serial.println(APssid);
   WiFi.begin(APssid, APpassword);
 }
-
+/**
+recoonect to check wifi status and mqtt connection to avoid send message when network is down
+  @param: nope
+  @return nope
+  @version 1.0
+  @author Tri Nguyen
+  @date June12017
+*/
 void reconnect() {
   // Loop until we're reconnected
   //  while (!client.connected()) {
