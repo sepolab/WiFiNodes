@@ -13,17 +13,16 @@
 */
 
 #include <Adafruit_Sensor.h>
-#include <DHT.h>
-#include <DHT_U.h>
-#include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager
-#include <ESP8266WiFi.h>          //https://github.com/esp8266/Arduino
-#include <DNSServer.h>
-#include <ESP8266WebServer.h>
-#include <ArduinoJson.h>          //https://github.com/bblanchon/ArduinoJson
+#include <DHT_U.h>                  //https://github.com/adafruit/DHT-sensor-library version 1.0.0
+#include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager version 0.11.0
+#include <ESP8266WiFi.h>          //https://github.com/esp8266/Arduino version 1.0.0
+#include <DNSServer.h>            // version 1.1.0
+#include <ESP8266WebServer.h>     // version 1.0.0
+#include <ArduinoJson.h>          //https://github.com/bblanchon/ArduinoJson version 5.1.0
 #include <FS.h>
-#include <PubSubClient.h> //April23
+#include <PubSubClient.h> //April23 version 2.6.0
 #include "math.h"
-#include <Adafruit_NeoPixel.h>    //https://github.com/adafruit/Adafruit_NeoPixel
+#include <Adafruit_NeoPixel.h>    //https://github.com/adafruit/Adafruit_NeoPixel version 1.1.1
 
 //-------------------------------
 
@@ -43,43 +42,24 @@ long debounceDelay = 1000;    // the debounce time; increase if the output flick
 // Note that for older NeoPixel strips you might need to change the third parameter--see the strandtest
 // example for more information on possible values.
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(1, PINLED, NEO_GRB + NEO_KHZ800);
-
-//const int ledPin =  5; // the number of the LED pin
-// Variables will change :
-//int ledState = HIGH;             // ledState used to set the LED
-//int configureState = 1;   //It is flag to recognize when is in configuration
-
-//unsigned long previousMillis = 0;        // will store last time LED was updated
-//unsigned long previousMillis1 = 0;       // will store last time LED was updated
-//unsigned long previousMillis2 = 0;
-//unsigned long previousMillis5 = 0;
-
-// constants won't change :
-//const long interval1000 = 1000;           // interval at which to blink (milliseconds)
-//const long interval50 = 50;           // interval at which to blink (milliseconds)
-//const long interval100 = 100;           // interval at which to blink (milliseconds)
-//const long interval10000 = 10000;           // interval at which to blink (milliseconds)
-//const long interval300 = 300;           // interval at which to blink (milliseconds)
-//const long interval5000 = 5000;           // interval at which to blink (milliseconds)
-
 //----------------WIFI CHECK STATE PAMAMETERS----------------
 int check = 0;
 bool checkWifi = false; //wifi connect indication 0: disconnect; 1: connected
-bool wifiReconnecting = false;
+bool mqttReconnecting = false;
 
 //------------WIFI CONFIGURATION PARAMETERS--------------------
 bool factoryReset = false;
-char APssid[20] = "UC_VP"; //AP is ESP will connect
-char APpassword[20] = "RAPtor1234!";
-char ssid[] = "ThermoNode"; // ESP in AP mode
+char APssid[20] = ""; //AP is ESP will connect
+char APpassword[20] = "";
 char password[] = "password";
 WiFiClient espClient; //April23
 byte mac[6];
 char temptMac[20] = "";
 //--------------MQTT client PRAMETERS--------------
 //define mqtt server default values here, if there are different values in config.json, they are overwritten.
-char mqtt_server[40] = "192.168.0.130"; //April24
-char mqtt_port[6] = "1883"; //April24
+char mqttServer[40] = ""; //April24
+char mqttPort[6] = ""; //April24
+char projectName[40] = "";
 char blynk_token[34] = "YOUR_BLYNK_TOKEN";
 //flag for saving data
 bool shouldSaveConfig = false;
@@ -87,8 +67,8 @@ PubSubClient client(espClient);//April23
 unsigned long previousMillis3 = 0; //set time for interval publish
 unsigned long previousMillis4 = 0; //set time for interval publish
 //char mqttClientID[] = ssid;
-char pubTopicGen[40] = "SO/R21/thermoNode1/state";
-char subTopicName[40] = "SO/R21/thermoNode1/set";
+char pubTopicGen[50] = "";
+char subTopicGen[50] = "";
 int valueOfSensor = 0;// value that will be published
 char pubMsg[150] = "Hello Server,it is client's 1st message!";//payload of publishing message
 char subMsg[150]; //payload of subcribled message
@@ -98,7 +78,7 @@ const long reconnectInveral = 10000;
 bool firstTime = true;
 //----------DTH CONFIGURATION---------------
 #define DHTPIN D4     // what digital pin we're connected to
-#define DHTTYPE DHT22   // DHT 21 (AM2301)
+#define DHTTYPE DHT22   // DHT 22 (AM2302)
 DHT_Unified dht(DHTPIN, DHTTYPE);
 char bufTemp[9];
 char bufHum[4];
@@ -182,20 +162,18 @@ void sendConfirmtoRetained (char inputString[]) {
 
 */
 void sendThermoIndex () {
-  //-----TEMPERATURE PUT----BEGIN-----
+
   firstTime = false;
   DTHCalculation();
-  if (!sensorState) {
-    snprintf (bufHum, 4, "F");
-    snprintf (bufTemp, 9, "F");
-    snprintf (bufHeatIndex, 9, "F");
+  if (sensorState) {
+   char publishMessage [100] = "";
+   snprintf(publishMessage, 100, "{\"temperature\":\"%s\",\"humidity\":\"%s\"}", bufTemp, bufHum);
+   Serial.print("Message send: ");
+   Serial.println(publishMessage);
+   client.publish(pubTopicGen, publishMessage, true);
+  } else {
+    Serial.println("Message DOES NOT SEND DUE TO SENSOR STATE IS FALSE!!!");
   }
-  //-----TEMPERATURE PUT----END-----
-  char publishMessage [100] = "";
-  snprintf(publishMessage, 100, "{\"temperature\":\"%s\",\"humidity\":\"%s\",\"feelike\":\"%s\"}", bufTemp, bufHum, bufHeatIndex);
-  Serial.print("Message send: ");
-  Serial.println(publishMessage);
-  client.publish(pubTopicGen, publishMessage, true);
 }
 
 /**
@@ -211,23 +189,14 @@ void sendThermoIndex () {
 
 */
 void keepAlive (char inputString[]) {
-  char publishMessage [100] = "";
-  snprintf(publishMessage, 100, "{\"NodeMacAddress\":\"%02X:%02X:%02X:%02X:%02X:%02X\",\"State\":\"%s\"}", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], inputString);
+  char publishMessage [120] = "";
+  snprintf(publishMessage, 120, "{\"NodeMacAddress\":\"%02X:%02X:%02X:%02X:%02X:%02X\",\"State\":\"%s\"}", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], inputString);
   Serial.print("Message send: ");
   Serial.println(publishMessage);
   char keepAliveTopic [55] = "";
   snprintf(keepAliveTopic, 55, "%s/keepAlive", pubTopicGen);
   client.publish(keepAliveTopic, publishMessage, true);
 }
-//-------- END case 1.2 if NORMAL MODE-------------------------
-//-----void callback description----
-//If the client is used to subscribe to topics, a callback function must be provided in the constructor.
-//This function is called when new messages arrive at the client.
-//topic - the topic the message arrived on (const char[])
-//payload - the message payload (byte array)
-//length - the length of the message payload (unsigned int)
-//-----------------------------------
-
 /**
   callback use to read payload of subcribe topic
   If the client is used to subscribe to topics, a callback function must be provided in the constructor.
@@ -245,11 +214,11 @@ void keepAlive (char inputString[]) {
 
 */
 void callback(char* topic, byte* payload, unsigned int length) {
-  for (int i = 0; i < 30; i++) {
+  for (int i = 0; i < 120; i++) {
     subMsg[i] = '#';
   }
   Serial.print("Message arrived from [");
-  Serial.print(mqtt_server);
+  Serial.print(mqttServer);
   Serial.print("] ;topic: [");
   Serial.print(topic);
   Serial.print("] with payload: [");
@@ -259,7 +228,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
   Serial.print("]");
   Serial.println();
-  ////--------detect command-----------
+  ////--------detect command--------- --
   isDefinedCommand = false;
   if (!isDefinedCommand) {  }
   if (!isDefinedCommand) {
@@ -273,7 +242,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
       i++;
     }
     snprintf (temptCommand, 200, "[%s]: NO SYNTAX FOUND", breakedValue);
-    keepAlive(temptCommand);
   }
   //----------END case 1.2 of NORMAL MODE -----------------------
 }
@@ -305,12 +273,49 @@ void saveConfigCallback () {
 void setup_wifi() {
   delay(10);
   // We start by connecting to a WiFi network
-  pixels.setPixelColor(0, pixels.Color(255, 0, 0)); //RED : setup
-  pixels.show();
   Serial.println();
-  Serial.print("Connecting to ");
+  Serial.print("Trying connect to ");
   Serial.println(APssid);
+  WiFi.mode(WIFI_STA);
   WiFi.begin(APssid, APpassword);
+  delay(5000);
+  //if you get here you have connected to the WiFi
+  if (WiFi.status() == WL_CONNECTED) {
+    checkWifi = true;   
+    Serial.print("Connected at IP ");
+    Serial.println(WiFi.localIP());
+    WiFi.macAddress(mac);
+    Serial.print("MAC: ");
+    Serial.print(mac[0],HEX);
+    Serial.print(":");
+    Serial.print(mac[1],HEX);
+    Serial.print(":");
+    Serial.print(mac[2],HEX);
+    Serial.print(":");
+    Serial.print(mac[3],HEX);
+    Serial.print(":");
+    Serial.print(mac[4],HEX);
+    Serial.print(":");
+    Serial.println(mac[5],HEX);   
+    snprintf(temptMac, 20, "TMAiOT_%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    Serial.println("Connecting to MQTT");
+    Serial.print("MQTT SERVER: "); Serial.print(mqttServer);
+    Serial.print(" MQTT PORT: "); Serial.println(mqttPort);
+    client.setServer(mqttServer, atoi(mqttPort)); //April23
+    client.setCallback(callback); //April23
+    snprintf (pubTopicGen, 50, "SmartOffice/%s/state", temptMac);
+    snprintf (subTopicGen, 50, "SmartOffice/%s/set", temptMac);
+    Serial.print("Default Publish Topic: "); Serial.println(pubTopicGen);
+    Serial.print("Default Subscribe Topic: "); Serial.println(subTopicGen);
+    reconnect(); //run for 1st register message
+  }
+  else {
+    Serial.print("Failed connect to AP. Code: ");
+    Serial.println(WiFi.status());
+    checkWifi = false;
+    pixels.setPixelColor(0, pixels.Color(255, 255, 0)); // RED+GREEN = YELLOW = Wifi DISCONNECTING...
+    pixels.show();
+  }
 }
 /**
   recoonect to check wifi status and mqtt connection to avoid send message when network is down
@@ -324,29 +329,37 @@ void setup_wifi() {
 */
 void reconnect() {
   // Loop until we're reconnected
-  if (!client.connected()) {
-    Serial.print("Attempting MQTT connection...");
+    client.connect(temptMac);
+    Serial.print("Attempting MQTT connection...using clientID: ");
+    Serial.print(temptMac);
+    Serial.print(" Result: ");
     // Attempt to connect
-    if (client.connect(temptMac)) {
+    if (client.connected()) {
       Serial.println("connected");
       pixels.setPixelColor(0, pixels.Color(0, 0, 255)); // BLUE: done setup - GOOD STATE
       pixels.show();
       // Once connected, publish an announcement...
-      snprintf (pubMsg, 70, "ID: %s; state: Reconnecting...", ssid);
-      client.publish(pubTopicGen, pubMsg,true);
+      char registerMessage[100] = "";
+      snprintf (registerMessage, 100, "{\"ID\":\"%s\",\"type\":\"%s\",\"project\":\"%s\"}", temptMac,"Thermo",projectName);
+      char defaultTopic[50] = "";
+      snprintf (defaultTopic, 50, "SmartOffice/RegisterDevices");
+      client.publish(defaultTopic, registerMessage, true);
+      delay(200);
       // ... and resubscribe
-      client.subscribe(subTopicName);
-      wifiReconnecting = false;
-    } else {
+      Serial.print("Sent register message: ");  Serial.print(registerMessage);  Serial.print(" to ");  Serial.println(defaultTopic);
+      delay(200);
+      client.subscribe(subTopicGen);
+      mqttReconnecting = false;
+    }
+    else {
       pixels.setPixelColor(0, pixels.Color(255, 0, 255)); // PINK: error in connecting MQTT server
       pixels.show();
       Serial.print("failed, rc=");
       Serial.print(client.state());
       Serial.println(" try again in 10 seconds");
-      wifiReconnecting = true;
+      mqttReconnecting = true;
     }
   }
-}
 //-------end Apirl 23 2016------------
 void setup() {
   pinMode(SOFT_RST_PIN, INPUT); //SET GPIO 0 IS SOFT RESET PIN AND IS INPUT
@@ -369,7 +382,7 @@ void setup() {
   //    delay(1500);
 
   //clean FS, for testing
-  //    SPIFFS.format();
+//      SPIFFS.format();
 
   //--------Read Congiguration file-----------
   Serial.println("mounting FS...");
@@ -394,20 +407,17 @@ void setup() {
         if (json.success()) {
           Serial.println("\nparsed config parameters");
           strcpy(APssid, json["APssid"]);
-          Serial.println(APssid);
           strcpy(APpassword, json["APpassword"]);          
-          strcpy(mqtt_server, json["mqtt_server"]);
-          strcpy(mqtt_port, json["mqtt_port"]);
-          strcpy(pubTopicGen, json["pubTopicGen"]);
-          strcpy(subTopicName, json["subTopicName"]);
-          Serial.println(mqtt_server);
-          Serial.println(mqtt_port);
-          Serial.println(pubTopicGen);
-          Serial.println(subTopicName);
+          strcpy(mqttServer, json["mqttServer"]);
+          strcpy(mqttPort, json["mqttPort"]);
+          strcpy(projectName, json["projectName"]);
+//          strcpy(subTopicGen, json["subTopicGen"]);
+          setup_wifi();
+          factoryReset = false;
         } else {
           Serial.println("failed to load json config");
+          factoryReset = true;
         }
-      }
     } else {
       Serial.println("File Config has not created");
       factoryReset = true;
@@ -415,35 +425,11 @@ void setup() {
   }
   else {
     Serial.println("failed to mount FS");
+    factoryReset = true;
   }
-  //--------END Read Congiguration file-----------
-  setup_wifi();
-  delay(5000);
-  //if you get here you have connected to the WiFi
-  if (WiFi.status() == WL_CONNECTED) {
-    checkWifi = true;
-    Serial.println(mqtt_server);
-    client.setServer(mqtt_server, atoi(mqtt_port)); //April23
-    client.setCallback(callback); //April23
-    Serial.println("DONE Setup mqtt sever");
-    WiFi.macAddress(mac);
-    Serial.print("MAC: ");
-    Serial.print(mac[0],HEX);
-    Serial.print(":");
-    Serial.print(mac[1],HEX);
-    Serial.print(":");
-    Serial.print(mac[2],HEX);
-    Serial.print(":");
-    Serial.print(mac[3],HEX);
-    Serial.print(":");
-    Serial.print(mac[4],HEX);
-    Serial.print(":");
-    Serial.println(mac[5],HEX);
-    snprintf(temptMac, 20, "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-  }
-  reconnect();
 }
-
+//--------END Read Congiguration file-----------
+} 
 //-------Apirl 23 2016------------
 
 void loop() {
@@ -465,7 +451,6 @@ void loop() {
   if ((factoryReset == true) or ((millis() - lastDebounceTime) > debounceDelay)) {
     Serial.println("ACCESSING WIFI DIRECT - AP");
     //WiFiManager
-
     //reset saved settings
     wifiManager.resetSettings();
     delay(2000);
@@ -477,12 +462,12 @@ void loop() {
     // The extra parameters to be configured (can be either global or just in the setup)
     // After connecting, parameter.getValue() will get you the configured value
     // id/name placeholder/prompt default length
-    WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, 40);
-    WiFiManagerParameter custom_mqtt_port("port", "mqtt port", mqtt_port, 5);
+    WiFiManagerParameter custom_mqttServer("server", "MQTT Server", mqttServer, 40);
+    WiFiManagerParameter custom_mqttPort("port", "MQTT Port", mqttPort, 5);
     //    WiFiManagerParameter custom_blynk_token("blynk", "blynk token", blynk_token, 32);
-    WiFiManagerParameter AP_password("p", "abcd1234", password, 20);
-    WiFiManagerParameter custom_subscribe_topic("subscribe", "subscribe_topic", subTopicName , 40);
-    WiFiManagerParameter custom_GeneralPublish_topic("pubTopicGen", "GeneralPublish_topic", pubTopicGen, 40);
+    WiFiManagerParameter AP_password("p", "password of SSID", APpassword, 20);
+    WiFiManagerParameter custom_project_name("projectName", "Project Name", projectName , 40);
+//    WiFiManagerParameter custom_GeneralPublish_topic("pubTopicGen", "GeneralPublish_topic", pubTopicGen, 40);
     //set config save notify callback
     wifiManager.setSaveConfigCallback(saveConfigCallback);
     //exit after config instead of connecting
@@ -490,25 +475,29 @@ void loop() {
 
     //add all your parameters here
     wifiManager.addParameter(&AP_password);
-    wifiManager.addParameter(&custom_mqtt_server);
-    wifiManager.addParameter(&custom_mqtt_port);
-    //    wifiManager.addParameter(&custom_blynk_token);
-    wifiManager.addParameter(&custom_subscribe_topic);
-    wifiManager.addParameter(&custom_GeneralPublish_topic);
+    wifiManager.addParameter(&custom_mqttServer);
+    wifiManager.addParameter(&custom_mqttPort);
+//    wifiManager.addParameter(&custom_blynk_token);
+    wifiManager.addParameter(&custom_project_name);
+//    wifiManager.addParameter(&custom_GeneralPublish_topic);
+    
+    WiFi.macAddress(mac);
+    char temptSSID [20] = "";
+    snprintf(temptSSID, 20, "TMAiOT_%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    Serial.println(temptSSID);
 
-
-    if (!wifiManager.autoConnect(ssid, password)) {
+    if (!wifiManager.autoConnect(temptSSID, password)) {
       Serial.println("failed to connect existing SSID ...");
     }
     else {
       //read updated parameters
       WiFi.status();
-      strcpy(mqtt_server, custom_mqtt_server.getValue());
-      strcpy(mqtt_port, custom_mqtt_port.getValue());
+      strcpy(mqttServer, custom_mqttServer.getValue());
+      strcpy(mqttPort, custom_mqttPort.getValue());
       //      strcpy(blynk_token, custom_blynk_token.getValue());
       strcpy(APpassword, AP_password.getValue());
-      strcpy(subTopicName, custom_subscribe_topic.getValue());
-      strcpy(pubTopicGen, custom_GeneralPublish_topic.getValue());
+      strcpy(projectName, custom_project_name.getValue());
+//      strcpy(pubTopicGen, custom_GeneralPublish_topic.getValue());
       //save the custom parameters to FS
       if (shouldSaveConfig) {
         Serial.println("saving config");
@@ -516,10 +505,10 @@ void loop() {
         JsonObject& json = jsonBuffer.createObject();
         json["APssid"] = WiFi.SSID();
         json["APpassword"] = APpassword;
-        json["mqtt_server"] = mqtt_server;
-        json["mqtt_port"] = mqtt_port;
-        json["subTopicName"] = subTopicName;
-        json["pubTopicGen"] = pubTopicGen;
+        json["mqttServer"] = mqttServer;
+        json["mqttPort"] = mqttPort;
+        json["projectName"] = projectName;
+//        json["pubTopicGen"] = pubTopicGen;
         File configFile = SPIFFS.open("/config.json", "w");
         if (!configFile) {
           Serial.println("failed to open config file for writing");
@@ -532,28 +521,19 @@ void loop() {
         pixels.setPixelColor(0, pixels.Color(0, 255, 0)); //BLUE GOOD
         pixels.show();
       }
-      delay(1000);
+
       ESP.reset();
-      delay(5000);
+      delay(2000);
     }
   }
   //-----------END RESET--------------------
   //---START WI4341-----------------------------------------------------
   //Description: Mode Wifi Client : Loop Authen until successful
-  if (wifiReconnecting) {
+  if (mqttReconnecting) {
     if ((simulatedDropedWifi) or (WiFi.status() != WL_CONNECTED)) {
       checkWifi = false;
-      pixels.setPixelColor(0, pixels.Color(255, 255, 0)); // RED+GREEN = YELLOW = Wifi DISCONNECTING...
-      pixels.show();
     }
     else {
-      Serial.println(WiFi.localIP());
-      if (checkWifi == false) {
-        WiFiClient espClient;
-        PubSubClient client(espClient);
-        client.setServer(mqtt_server, atoi(mqtt_port)); //April23
-        client.setCallback(callback); //April23
-      }
       checkWifi = true;
     }
   }
@@ -576,5 +556,8 @@ void loop() {
       }
     }
     client.loop();
+  } else {
+    setup_wifi();
   }
 }
+
