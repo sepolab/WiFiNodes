@@ -166,21 +166,10 @@ void sendPowerMeasureIndex (int intervalSample) {
   snprintf (str_Prms, 9,"%d.%02d", d1, d2);
 
   char publishMessage [150] = "";
-  snprintf(publishMessage, 150, "{\"Prms\":\"%s\",\"Pde\":\"kW\",\"Irms\":\"%s\",\"Ide\":\"A\",\"Vrms\":\"230\",\"Vde\":\"V\"}", str_Prms, str_Irms);
+  snprintf(publishMessage, 150, "{\"Prms\":\"%s\",\"Irms\":\"%s\",\"Vrms\":\"230\",\"Energy\":\"%s\",\"Duration\":\"%i\"}", str_Prms, str_Irms, str_Arms,runnningDuration);
   Serial.print("Message send: ");
   Serial.println(publishMessage);
   client.publish(pubTopicGen, publishMessage, true);
-  
-  unsigned long currentMillis7 = millis();
-   if (currentMillis7 - previousMillis7 > 60000) {
-        previousMillis7 = currentMillis7;
-        unsigned long currentMillis7 = millis();
-        char publishMessage1 [120] = "";
-        snprintf(publishMessage1, 120, "{\"Energy\":\"%s\",\"Ede\":\"kWh\",\"Duration\":\"%i\",\"time\":\"seconds\"}", str_Arms,runnningDuration);
-        Serial.print("Message send: ");
-        Serial.println(publishMessage1);
-        client.publish(pubTopicGen, publishMessage1, true);
-  }
 }
 /**
   keep-alive interval to update node status. There is 2 states of interval
