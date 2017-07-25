@@ -1,19 +1,19 @@
 /**
   TMAiOT SMART OFFICE PROJECT
-  Name: TMAiOT_ThermoNode
-  Purpose: Tracking Temperature and Humidity and send to MQTT Broker
+  Name: TMAiOT_PowerMeasureNode
+  Purpose: Tracking AC Current and Energy and send to MQTT Broker
   Status of LED:
   - Color RED: WiFi Node is starting up, please wait in 10 seconds.
   - Color BLUE: WiFi Node is working as expectation without error.
   - Color GREEN: WiFi Node is in Access Point Mode/Direct-WiFi for Configuration
   - Color PINK: WiFi is in Client Mode, but cannot connect to MQTT Broker Server due to Broker issue.
   - Color YELLOW: WiFi is in Client Mode, but cannot connect to WiFi due to WiFi Access Point issue.
+  
   @author Tri Nguyen nductri@tma.com.vn
   @version 1.0 6/15/17
 */
 
-#include <Adafruit_Sensor.h>
-#include <DHT_U.h>                  //https://github.com/adafruit/DHT-sensor-library version 1.0.0
+#include "EmonLib.h" 
 #include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager version 0.11.0
 #include <ESP8266WiFi.h>          //https://github.com/esp8266/Arduino version 1.0.0
 #include <DNSServer.h>            // version 1.1.0
@@ -23,7 +23,6 @@
 #include <PubSubClient.h> //April23 version 2.6.0
 #include "math.h"
 #include <Adafruit_NeoPixel.h>    //https://github.com/adafruit/Adafruit_NeoPixel version 1.1.1
-
 //-------------------------------
 
 //---------SOFT RESET BUTTON PARAMETERS---------------------
@@ -42,6 +41,7 @@ long debounceDelay = 1000;    // the debounce time; increase if the output flick
 // Note that for older NeoPixel strips you might need to change the third parameter--see the strandtest
 // example for more information on possible values.
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(1, PINLED, NEO_GRB + NEO_KHZ800);
+
 //----------------WIFI CHECK STATE PAMAMETERS----------------
 int check = 0;
 bool checkWifi = false; //wifi connect indication 0: disconnect; 1: connected
@@ -60,6 +60,7 @@ char temptMac[20] = "";
 char mqttServer[40] = ""; //April24
 char mqttPort[6] = ""; //April24
 char projectName[40] = "";
+char ACMeasureRange[4] = "";
 char blynk_token[34] = "YOUR_BLYNK_TOKEN";
 //flag for saving data
 bool shouldSaveConfig = false;
@@ -76,70 +77,28 @@ long publishInveral = 15000;
 bool mqttConnected = false;
 const long reconnectInveral = 10000;
 bool firstTime = true;
-//----------DTH CONFIGURATION---------------
-#define DHTPIN D4     // what digital pin we're connected to
-#define DHTTYPE DHT22   // DHT 22 (AM2302)
-DHT_Unified dht(DHTPIN, DHTTYPE);
-char bufTemp[9];
-char bufHum[4];
-char bufHeatIndex[9];
-bool sensorState = false;
+//----------EnergyMonitor CONFIGURATION---------------
+EnergyMonitor emon1;  
+unsigned long previousMillis6 = 0;
+unsigned long previousMillis7 = 0;
+double Arms;
+unsigned long runnningDuration = 0;
 //----------ESP API in case using DTH21 CONFIGURATION---------------
 bool isDefinedCommand = true;
 bool simulatedDropedWifi = false;
 ////--------END VAR=-----------------------------------------------
 
 //------------------------------------------------
+//void API for cloud command
 
-/**
-  Read DHT22 sensor
-
-  @param nope
-  @return bufHum, bufTemp, bufHeatIndex
-  @version 1.0
-  @author Tri Nguyen
-  @date June12017
-
-*/
-void DTHCalculation() {
-  sensors_event_t event;
-  dht.humidity().getEvent(&event);
-  float humidity = event.relative_humidity;
-  Serial.println(humidity);
-  // Read temperature as Celsius (the default)
-  dht.temperature().getEvent(&event);
-  float temperature = event.temperature;
-  Serial.println(temperature);
-  // Check if any reads failed and exit early (to try again).
-  if (std::isnan(humidity) || std::isnan(temperature)) {
-    sensorState = false;
-  }
-  else {
-    // Compute heat index in Celsius (isFahreheit = false)
-    float heatIndex = 0;
-    sensorState = true;
-    int d1 = humidity;
-    snprintf (bufHum, 4, "%d", d1);
-    d1 = temperature;
-    float f2 = temperature - d1;
-    int d2 = (f2 * 10);
-    snprintf (bufTemp, 9, "%d.%01d", d1, d2);
-    d1 = heatIndex;
-    f2 = heatIndex - d1;
-    d2 = (f2 * 10);
-    snprintf (bufHeatIndex, 9, "%d.%01d", d1, d2);
-  }
-}
 
 /**
   Send Confirmation to broker as same as payloaf for retained
-
   @param char[] payload
   @return nope
   @version 1.0
   @author Tri Nguyen
   @date June12017
-
 */
 void sendConfirmtoRetained (char inputString[]) {
   firstTime = false;
@@ -149,72 +108,114 @@ void sendConfirmtoRetained (char inputString[]) {
 }
 
 /**
-  send Thermo Index to update broker
-
+sendPowerMeasureIndex to update node status
+There is 2 states of interval
   @param nope
   @return
-  //1_Termperature
-  //2_Humid
-  //3_feelike
+//1_Power Measure
+//2_AC Current
+//3_Voltage
   @version 1.0
   @author Tri Nguyen
   @date June12017
-
 */
-void sendThermoIndex () {
+void sendPowerMeasureIndex (int intervalSample) {
+  double Irms = emon1.calcIrms(1480);  // Calculate Irms only
+  double Prms = Irms* 0.23;
+  double Ainstant = 0.0;
+  double ArmsDisplay;
+  char str_Irms[6];
+  char str_Prms[9];
+  char str_Arms[9];
+    
+  Serial.print("Prms = ");
+  Serial.print(Prms);         // Apparent power
+  Serial.print("kW"); 
+  
+  Serial.print("; Irms = ");
+  Serial.print(Irms);
+  Serial.print("A");
 
-  firstTime = false;
-  DTHCalculation();
-  if (sensorState) {
-   char publishMessage [100] = "";
-   snprintf(publishMessage, 100, "{\"temperature\":\"%s\",\"humidity\":\"%s\"}", bufTemp, bufHum);
-   Serial.print("Message send: ");
-   Serial.println(publishMessage);
-   client.publish(pubTopicGen, publishMessage, true);
-  } else {
-    Serial.println("Message DOES NOT SEND DUE TO SENSOR STATE IS FALSE!!!");
+  Ainstant = Prms * intervalSample / 3600.0;
+  Arms  = Arms + Ainstant;
+  Serial.print("; Energy = ");
+  
+  ArmsDisplay = Arms;
+  Serial.print(ArmsDisplay);
+  Serial.print("kWh");          // Energy
+  int d1 = ArmsDisplay;
+  float f2 = ArmsDisplay - d1;
+  int d2 = (f2 * 100);
+  snprintf (str_Arms, 9,"%d.%02d", d1, d2);
+  
+  Serial.print(" after ");
+  runnningDuration = round (millis() / 1000);
+  Serial.print(runnningDuration);
+  Serial.print("s");
+  
+  Serial.println ();
+
+  d1 = Irms;
+  f2 = Irms - d1;
+  d2 = (f2 * 100);
+  snprintf (str_Irms, 6,"%d.%02d", d1, d2);
+
+  d1 = Prms;
+  f2 = Prms - d1;
+  d2 = (f2 * 100);
+  snprintf (str_Prms, 9,"%d.%02d", d1, d2);
+
+  char publishMessage [150] = "";
+  snprintf(publishMessage, 150, "{\"Prms\":\"%s\",\"Pde\":\"kW\",\"Irms\":\"%s\",\"Ide\":\"A\",\"Vrms\":\"230\",\"Vde\":\"V\"}", str_Prms, str_Irms);
+  Serial.print("Message send: ");
+  Serial.println(publishMessage);
+  client.publish(pubTopicGen, publishMessage, true);
+  
+  unsigned long currentMillis7 = millis();
+   if (currentMillis7 - previousMillis7 > 60000) {
+        previousMillis7 = currentMillis7;
+        unsigned long currentMillis7 = millis();
+        char publishMessage1 [120] = "";
+        snprintf(publishMessage1, 120, "{\"Energy\":\"%s\",\"Ede\":\"kWh\",\"Duration\":\"%i\",\"time\":\"seconds\"}", str_Arms,runnningDuration);
+        Serial.print("Message send: ");
+        Serial.println(publishMessage1);
+        client.publish(pubTopicGen, publishMessage1, true);
   }
 }
-
 /**
   keep-alive interval to update node status. There is 2 states of interval
   1_active when ping frequently
   2_reconnecting when re-connect
   @param char [] payload
   @return nope
-
   @version 1.0
   @author Tri Nguyen
   @date June12017
-
 */
 void keepAlive (char inputString[]) {
-  char publishMessage [120] = "";
-  snprintf(publishMessage, 120, "{\"NodeMacAddress\":\"%02X:%02X:%02X:%02X:%02X:%02X\",\"State\":\"%s\"}", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], inputString);
+  char publishMessage [100] = "";
+  snprintf(publishMessage, 100, "{\"NodeMacAddress\":\"%02X:%02X:%02X:%02X:%02X:%02X\",\"State\":\"%s\"}",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5], inputString);
   Serial.print("Message send: ");
   Serial.println(publishMessage);
   char keepAliveTopic [55] = "";
-  snprintf(keepAliveTopic, 55, "%s/keepAlive", pubTopicGen);
+  snprintf(keepAliveTopic, 55,"%s/keepAlive",pubTopicGen);
   client.publish(keepAliveTopic, publishMessage, true);
 }
 /**
   callback use to read payload of subcribe topic
   If the client is used to subscribe to topics, a callback function must be provided in the constructor.
   This function is called when new messages arrive at the client.
-
   @param:
     topic - the topic the message arrived on (const char[])
     payload - the message payload (byte array)
     length - the length of the message payload (unsigned int)
   @return nope
-
   @version 1.0
   @author Tri Nguyen
   @date June12017
-
 */
 void callback(char* topic, byte* payload, unsigned int length) {
-  for (int i = 0; i < 120; i++) {
+  for (int i = 0; i < 30; i++) {
     subMsg[i] = '#';
   }
   Serial.print("Message arrived from [");
@@ -228,47 +229,42 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
   Serial.print("]");
   Serial.println();
-  ////--------detect command--------- --
+////--------detect command-----------
   isDefinedCommand = false;
   if (!isDefinedCommand) {  }
   if (!isDefinedCommand) {
-    char temptCommand[200] = "";
-    char breakedValue[150] = "";
-    int i = 0;
-    int countOfChar = 0;
-    //Remove All un-needed # command from received message
-    while (subMsg[i] != '#') {
-      breakedValue[i] = subMsg[i];
-      i++;
-    }
-    snprintf (temptCommand, 200, "[%s]: NO SYNTAX FOUND", breakedValue);
+      char temptCommand[200] = "";
+      char breakedValue[150] = "";
+      int i = 0;
+      int countOfChar = 0;
+      //Remove All un-needed # command from received message
+      while (subMsg[i] != '#') {
+                breakedValue[i] = subMsg[i];
+                i++;
+      }     
+      snprintf (temptCommand, 200, "[%s]: NO SYNTAX FOUND", breakedValue);
+      keepAlive(temptCommand);
   }
-  //----------END case 1.2 of NORMAL MODE -----------------------
 }
 /**
   callback notifying us of the need to save config
   @param: nope
   @return nope
-
   @version 1.0
   @author Tri Nguyen
   @date June12017
-
 */
 void saveConfigCallback () {
   Serial.println("Should save config");
   shouldSaveConfig = true;
 }
-
 /**
   setup_wifi to config wifi after user change setup
   @param: nope
   @return nope
-
   @version 1.0
   @author Tri Nguyen
   @date June12017
-
 */
 void setup_wifi() {
   delay(10);
@@ -303,8 +299,8 @@ void setup_wifi() {
     Serial.print(" MQTT PORT: "); Serial.println(mqttPort);
     client.setServer(mqttServer, atoi(mqttPort)); //April23
     client.setCallback(callback); //April23
-    snprintf (pubTopicGen, 50, "SmartOffice/%s/state", temptMac);
-    snprintf (subTopicGen, 50, "SmartOffice/%s/set", temptMac);
+    snprintf (pubTopicGen, 50, "%s/%s/state", projectName, temptMac);
+    snprintf (subTopicGen, 50, "%s/%s/set", projectName, temptMac);
     Serial.print("Default Publish Topic: "); Serial.println(pubTopicGen);
     Serial.print("Default Subscribe Topic: "); Serial.println(subTopicGen);
     reconnect(); //run for 1st register message
@@ -340,9 +336,9 @@ void reconnect() {
       pixels.show();
       // Once connected, publish an announcement...
       char registerMessage[100] = "";
-      snprintf (registerMessage, 100, "{\"ID\":\"%s\",\"type\":\"%s\",\"project\":\"%s\"}", temptMac,"Thermo",projectName);
+      snprintf (registerMessage, 100, "{\"ID\":\"%s\",\"type\":\"%s\",\"project\":\"%s\",\"MaxACRange\":\"%s\"}", temptMac,"ACMeasure",projectName, ACMeasureRange);
       char defaultTopic[50] = "";
-      snprintf (defaultTopic, 50, "SmartOffice/RegisterDevices");
+      snprintf (defaultTopic, 50, "%s/RegisterDevices", projectName);
       client.publish(defaultTopic, registerMessage, true);
       delay(200);
       // ... and resubscribe
@@ -360,20 +356,20 @@ void reconnect() {
       mqttReconnecting = true;
     }
   }
-//-------end Apirl 23 2016------------
-void setup() {
-  pinMode(SOFT_RST_PIN, INPUT); //SET GPIO 0 IS SOFT RESET PIN AND IS INPUT
-  Serial.begin(115200); //start Serial
 
-  dht.begin(); //Start DTH
-  sensor_t sensor; //Start DTH
+void setup() {
+  // set the digital pin as output:
+  //SET GPIO 0 IS SOFT RESET PIN AND IS INPUT
+  pinMode(SOFT_RST_PIN, INPUT);
+  // put your setup code here, to run once:
+  //
+  Serial.begin(115200);
 
   pixels.begin(); // This initializes the NeoPixel library.
-
   //WiFiManager
   //Local intialization. Once its business is done, there is no need to keep it around
   //    WiFiManager wifiManager;
-
+  
   //  //exit after config instead of connecting
   //  wifiManager.setBreakAfterConfig(true);
 
@@ -382,7 +378,7 @@ void setup() {
   //    delay(1500);
 
   //clean FS, for testing
-//     SPIFFS.format();
+//SPIFFS.format();
 
   //--------Read Congiguration file-----------
   Serial.println("mounting FS...");
@@ -411,9 +407,19 @@ void setup() {
           strcpy(mqttServer, json["mqttServer"]);
           strcpy(mqttPort, json["mqttPort"]);
           strcpy(projectName, json["projectName"]);
-//          strcpy(subTopicGen, json["subTopicGen"]);
+          strcpy(ACMeasureRange, json["ACMeasureRange"]);
           setup_wifi();
           factoryReset = false;
+          Serial.println(ACMeasureRange);
+  //ACMeasureRange is explained bellow
+//  if R burden = 22 for Irms max = 97 A => ACMeasureRange = 91
+//  if R burden = 120 for Irms max = 19.5 A => ACMeasureRange = 17
+//  if R burden = 470 for Irms max = 4.9 A => ACMeasureRange = 5
+          if ((ACMeasureRange[0] == '2') and (ACMeasureRange[1] == '0')) { emon1.current(A0, 17);Serial.println("AC Current Maxinum Range: 20A");}
+          else if ((ACMeasureRange[0] == '1') and (ACMeasureRange[1] == '0')and (ACMeasureRange[2] == '0')) { emon1.current(A0, 91);Serial.println("AC Current Maxinum Range: 100A");}
+          else if ((ACMeasureRange[0] == '5')) { emon1.current(A0, 5);Serial.println("AC Current Maxinum Range: 5A");}
+          else { emon1.current(A0, 91);Serial.println("AC Current Maxinum Range: 100A");}
+          
         } else {
           Serial.println("failed to load json config");
           factoryReset = true;
@@ -428,8 +434,10 @@ void setup() {
     factoryReset = true;
   }
 }
+}
 //--------END Read Congiguration file-----------
-} 
+
+
 //-------Apirl 23 2016------------
 
 void loop() {
@@ -447,7 +455,7 @@ void loop() {
     lastDebounceTime = millis();
   }
 
-  //--------RESET WIFI CONFIGURATION-------------------------------
+//--------RESET WIFI CONFIGURATION-------------------------------
   if ((factoryReset == true) or ((millis() - lastDebounceTime) > debounceDelay)) {
     Serial.println("ACCESSING WIFI DIRECT - AP");
     //WiFiManager
@@ -467,7 +475,7 @@ void loop() {
     //    WiFiManagerParameter custom_blynk_token("blynk", "blynk token", blynk_token, 32);
     WiFiManagerParameter AP_password("p", "password of SSID", APpassword, 20);
     WiFiManagerParameter custom_project_name("projectName", "Project Name", projectName , 40);
-//    WiFiManagerParameter custom_GeneralPublish_topic("pubTopicGen", "GeneralPublish_topic", pubTopicGen, 40);
+    WiFiManagerParameter custom_AC_Current_Range("ACMeasureRange", "AC Measure Range: 5/20/100", ACMeasureRange, 4);
     //set config save notify callback
     wifiManager.setSaveConfigCallback(saveConfigCallback);
     //exit after config instead of connecting
@@ -479,7 +487,7 @@ void loop() {
     wifiManager.addParameter(&custom_mqttPort);
 //    wifiManager.addParameter(&custom_blynk_token);
     wifiManager.addParameter(&custom_project_name);
-//    wifiManager.addParameter(&custom_GeneralPublish_topic);
+    wifiManager.addParameter(&custom_AC_Current_Range);
     
     WiFi.macAddress(mac);
     char temptSSID [20] = "";
@@ -497,7 +505,7 @@ void loop() {
       //      strcpy(blynk_token, custom_blynk_token.getValue());
       strcpy(APpassword, AP_password.getValue());
       strcpy(projectName, custom_project_name.getValue());
-//      strcpy(pubTopicGen, custom_GeneralPublish_topic.getValue());
+      strcpy(ACMeasureRange, custom_AC_Current_Range.getValue());
       //save the custom parameters to FS
       if (shouldSaveConfig) {
         Serial.println("saving config");
@@ -508,7 +516,7 @@ void loop() {
         json["mqttServer"] = mqttServer;
         json["mqttPort"] = mqttPort;
         json["projectName"] = projectName;
-//        json["pubTopicGen"] = pubTopicGen;
+        json["ACMeasureRange"] = ACMeasureRange;
         File configFile = SPIFFS.open("/config.json", "w");
         if (!configFile) {
           Serial.println("failed to open config file for writing");
@@ -526,7 +534,7 @@ void loop() {
       delay(2000);
     }
   }
-  //-----------END RESET--------------------
+    //-----------END RESET--------------------
   //---START WI4341-----------------------------------------------------
   //Description: Mode Wifi Client : Loop Authen until successful
   if (mqttReconnecting) {
@@ -540,11 +548,21 @@ void loop() {
   //----STOP WI4341----------------------------------------------------
     if (checkWifi == true) {
       unsigned long currentMillis3 = millis();
+      unsigned long currentMillis6 = millis();
+      
+      if (currentMillis6 - previousMillis6 > 2000) {
+        previousMillis6 = currentMillis6;
+        unsigned long currentMillis6 = millis();
+        if (client.connected()) {
+          sendPowerMeasureIndex(2);
+          
+        }
+      }
+      
       if (currentMillis3 - previousMillis3 > publishInveral) {
         previousMillis3 = currentMillis3;
         unsigned long currentMillis4 = millis();
         if (client.connected()) {
-          sendThermoIndex(); 
           char temptCommand[] = "Active";
           keepAlive(temptCommand);
       }
@@ -560,4 +578,3 @@ void loop() {
     setup_wifi();
   }
 }
-
