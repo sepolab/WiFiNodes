@@ -78,9 +78,9 @@ char subMsg[50]; //payload of subcribled message
 long publishInveral = 15000;
 bool mqttConnected = false;
 const long reconnectInveral = 10000;
-char isON[] = "F";
-char isSwitch[] = "F";
-char isOpen[] = "F";
+char isON[] = "0";
+char ishuman[] = "0";
+char isOpen[] = "0";
 bool firstTime = true;
 //----------DTH CONFIGURATION---------------
 #define DHTPIN 0     // what digital pin we're connected to
@@ -94,25 +94,36 @@ bool sensorState = false;
 bool isDefinedCommand = true;
 bool simulatedDropedWifi = false;
 //---------CONTROL CONFIGURATION---------------------------------------
-int pinControl = 12;           // Use pinLED of Wifi indication.
-int pinControlState = HIGH;
+int pinControl = 12;           // D6
+int pinControlState = LOW;
+int pinControlValue = 0;  
 unsigned long previousMillis6 = 0;
 unsigned long previousMillis7 = 0;
 int relayCriteria = 3;
 float minIn = 29;
 float maxIn = 31;
+unsigned long previousMillis111 = 0;
+unsigned long previousMillis22 = 0;
+unsigned long previousMillis33 = 0;
+int isHumanDelay = 20000;
 //---------LIGHT SENSOR CONFIGURATION---------------------------------------
-int pinLightSensor = 13;           // Use pin of light sensor is connecting.
+int pinLightSensor = 13;           // D7
 int pinLightSensorState = LOW;             // we start, assuming no light detected
 int pinLightSensorValue = 0;  
 int accumLIGHTchecking = 0; // variable for reading the pin status
 unsigned long previousMillis11 = 0;
 unsigned long previousMillis12 = 0;
 //---------DOOR SENSOR CONFIGURATION---------------------------------------
-int pinDoorSensor = 16                      ;           // Use pin of light sensor is connecting.
+int pinDoorSensor = 16;           // D0
 int pinDoorSensorState = HIGH;             // we start, assuming no light detected
 int pinDoorSensorValue = 0;  
 int accumchecking = 0; // variable for reading the pin status
+//ALARM CONFIGURATION
+//------------------------------------------------------------
+bool isAlarmActive = false;
+int pinSpeaker = 5; // D5
+int pinSpeakerState = HIGH;  
+unsigned long previousMillisAlarm = 0;
 //--------END VAR=-----------------------------------------------
 
 //------------------------------------------------
@@ -148,8 +159,8 @@ void setControl(char inputString[]) {
           pinControlState = LOW;
           digitalWrite(pinControl, pinControlState);
           if ((!firstTime) and (client.connected())) {
-            snprintf (isSwitch, 2, "1");
-            snprintf(pubMsg, 80, "{\"temperature\":\"%s\",\"humidity\":\"%s\",\"light\":\"%s\",\"door\":\"%s\",\"switch\":\"%s\"}",bufTemp,bufHum,isON,isOpen,isSwitch);
+            snprintf (ishuman, 2, "1");
+            snprintf(pubMsg, 80, "{\"temperature\":\"%s\",\"humidity\":\"%s\",\"light\":\"%s\",\"door\":\"%s\",\"ishuman\":\"%s\"}",bufTemp,bufHum,isON,isOpen,ishuman);
             client.publish(pubTopicGen, pubMsg,true);
             delay(50);
             snprintf(pubMsg, 80, "SETCONTROL ON");
@@ -161,8 +172,8 @@ void setControl(char inputString[]) {
           pinControlState = HIGH; 
           digitalWrite(pinControl, pinControlState);
           if ((!firstTime) and client.connected()) {
-            snprintf (isSwitch, 2, "0");
-            snprintf(pubMsg, 80, "{\"temperature\":\"%s\",\"humidity\":\"%s\",\"light\":\"%s\",\"door\":\"%s\",\"switch\":\"%s\"}",bufTemp,bufHum,isON,isOpen,isSwitch);
+            snprintf (ishuman, 2, "0");
+            snprintf(pubMsg, 80, "{\"temperature\":\"%s\",\"humidity\":\"%s\",\"light\":\"%s\",\"door\":\"%s\",\"ishuman\":\"%s\"}",bufTemp,bufHum,isON,isOpen,ishuman);
             client.publish(pubTopicGen, pubMsg,true);
             delay(50);
             snprintf(pubMsg, 80, "SETCONTROL OFF");
@@ -272,8 +283,8 @@ void callback(char* topic, byte* payload, unsigned int length) {
 ////--------detect command-----------
   isDefinedCommand = false;
   if (!isDefinedCommand) { isSetPubTime(subMsg); }
-  if (!isDefinedCommand) { setControl(subMsg); }
-
+//  if (!isDefinedCommand) { setControl(subMsg); }
+  if (!isDefinedCommand) { isAlarm(subMsg); }
   if (!isDefinedCommand) {
       snprintf (pubMsg, 30, "COMMAND NOT FOUND"); //strtok(inputString,"#"));
       Serial.print("Message send: ");
@@ -282,7 +293,55 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
 //----------END case 1.2 of NORMAL MODE -----------------------
 }
-
+//-------------------START PROCEDURE ALA------------------------------
+void isAlarm(char inputString[]) {
+ char breakedCommand[] = "ALARM";
+  char breakedValue[10];
+  int check = 0;
+  int countSpace = 0;
+  int i = 0;
+  int j = 0;
+  int countOfChar = 0;
+  while (inputString[i] != '#') {
+    if (inputString[i] != ' ') {
+        if (countSpace == 0) {
+            if (breakedCommand[i] != inputString[i]) {
+                check++;
+            }
+            countOfChar++;     
+        } else {
+                breakedValue[j] = inputString[i];
+                j++;
+            } 
+      } else {
+      countSpace++;
+        }
+    i++;
+  }
+  if ((countOfChar == (sizeof(breakedCommand)-1)) and (check == 0)) {
+        if ((breakedValue[0] == 'O') and (breakedValue[1] == 'N') and (j == 2)) {
+          isAlarmActive = true;
+          if ((!firstTime) and (client.connected())) {
+              snprintf(pubMsg, 80, "ALARM ON");
+              client.publish(pubTopicGen, pubMsg,true);
+              delay(50);
+          }
+        }
+        else if ((breakedValue[0] == 'O') and (breakedValue[1] == 'F') and (breakedValue[2] == 'F') and (j == 3)) {
+          isAlarmActive = false;
+            if ((!firstTime) and client.connected()) {
+              snprintf(pubMsg, 80, "ALARM OFF");
+              client.publish(pubTopicGen, pubMsg,true);
+              delay(50);
+          }
+        }
+      isDefinedCommand = true;   
+      }
+     else {
+      isDefinedCommand = false;
+    }
+}
+//END of ALARM
 //callback notifying us of the need to save config
 void saveConfigCallback () {
   Serial.println("Should save config");
@@ -337,10 +396,11 @@ void setup() {
   //    WiFiManager wifiManager;
   ledState = LOW;
 //  digitalWrite(ledPin, ledState);
-  pinMode(pinControl, OUTPUT);  
-  digitalWrite(pinControl, HIGH);
+  pinMode(pinControl, INPUT);  
   pinMode(pinLightSensor, INPUT);
   pinMode(pinDoorSensor, INPUT);  
+  pinMode(pinSpeaker, OUTPUT);
+  digitalWrite(pinSpeaker, HIGH);
   //  //exit after config instead of connecting
   //  wifiManager.setBreakAfterConfig(true);
 
@@ -538,7 +598,7 @@ void loop() {
       previousMillis3 = currentMillis3;
       unsigned long currentMillis4 = millis();
       snprintf (isON, 1, "F");
-      snprintf (isSwitch, 1, "F");
+      snprintf (ishuman, 1, "F");
       snprintf (isOpen, 1, "F");
       if (client.connected()) {
         //-----TEMPERATURE PUT----BEGIN-----
@@ -575,15 +635,16 @@ void loop() {
         //-----DOOR PUT----END-----
         //-----RELAY STATE PUT----BEGIN-----
         if (pinControlState == LOW) {
-            snprintf (isSwitch, 2, "1");
-            Serial.print("Message send: switch ");
-            Serial.println(isSwitch);
+            snprintf (ishuman, 2, "0");
+            Serial.print("Message send: isHuman ");
+            Serial.println(ishuman);
         } else if (pinControlState == HIGH) {
-            snprintf (isSwitch, 2, "0");
-            Serial.print("Message send: switch ");
+            snprintf (ishuman, 2, "1");
+            Serial.print("Message send: ishuman ");
+            Serial.println(ishuman);
         }
         //-----LIGHT PUT----END-----
-        snprintf(pubMsg, 80, "{\"temperature\":\"%s\",\"humidity\":\"%s\",\"light\":\"%s\",\"door\":\"%s\",\"switch\":\"%s\"}",bufTemp,bufHum,isON,isOpen,isSwitch);
+        snprintf(pubMsg, 80, "{\"temperature\":\"%s\",\"humidity\":\"%s\",\"light\":\"%s\",\"door\":\"%s\",\"ishuman\":\"%s\"}",bufTemp,bufHum,isON,isOpen,ishuman);
         client.publish(pubTopicGen, pubMsg,true);
         delay(50);
     }
@@ -615,9 +676,9 @@ void loop() {
       if (accumLIGHTchecking > 10) { 
         if (pinLightSensorState == HIGH) {
           pinLightSensorState = LOW;
-          if ((!firstTime) and (webClient.connect(host, httpPort))) {
+          if ((!firstTime)) {
               snprintf (isON, 2, "1");
-              snprintf(pubMsg, 80, "{\"temperature\":\"%s\",\"humidity\":\"%s\",\"light\":\"%s\",\"door\":\"%s\",\"switch\":\"%s\"}",bufTemp,bufHum,isON,isOpen,isSwitch);
+              snprintf(pubMsg, 80, "{\"temperature\":\"%s\",\"humidity\":\"%s\",\"light\":\"%s\",\"door\":\"%s\",\"ishuman\":\"%s\"}",bufTemp,bufHum,isON,isOpen,ishuman);
               client.publish(pubTopicGen, pubMsg,true);
               delay(50);
           } else {
@@ -634,9 +695,9 @@ void loop() {
        else {
         if (pinLightSensorState == LOW) {
           pinLightSensorState = HIGH;
-          if ((!firstTime) and (webClient.connect(host, httpPort)))  {
+          if ((!firstTime))  {
               snprintf (isON, 2, "0");
-              snprintf(pubMsg, 80, "{\"temperature\":\"%s\",\"humidity\":\"%s\",\"light\":\"%s\",\"door\":\"%s\",\"switch\":\"%s\"}",bufTemp,bufHum,isON,isOpen,isSwitch);
+              snprintf(pubMsg, 80, "{\"temperature\":\"%s\",\"humidity\":\"%s\",\"light\":\"%s\",\"door\":\"%s\",\"ishuman\":\"%s\"}",bufTemp,bufHum,isON,isOpen,ishuman);
               client.publish(pubTopicGen, pubMsg,true);
               delay(50);
           } else {
@@ -648,7 +709,7 @@ void loop() {
             }
           }
         } 
-//------END PIR analysis--------------
+//------END LIGHT analysis--------------
 //NEW FEATURE: DOOR SENSOR WILL DETECT DOOR OPEN ROOM AND SEE TO SERVER DWEET.IO
 //--------Door sensor analysis and check up---------------
   unsigned long currentMillis1 = millis();
@@ -666,9 +727,9 @@ void loop() {
       if (accumchecking > 5) { 
         if (pinDoorSensorState == HIGH) {
           pinDoorSensorState = LOW;
-          if ((!firstTime) and (webClient.connect(host, httpPort))) {
+          if ((!firstTime)) {
               snprintf (isOpen, 2, "0");
-              snprintf(pubMsg, 80, "{\"temperature\":\"%s\",\"humidity\":\"%s\",\"light\":\"%s\",\"door\":\"%s\",\"switch\":\"%s\"}",bufTemp,bufHum,isON,isOpen,isSwitch);
+              snprintf(pubMsg, 80, "{\"temperature\":\"%s\",\"humidity\":\"%s\",\"light\":\"%s\",\"door\":\"%s\",\"ishuman\":\"%s\"}",bufTemp,bufHum,isON,isOpen,ishuman);
               client.publish(pubTopicGen, pubMsg,true);
               delay(50);
           } else {
@@ -683,9 +744,60 @@ void loop() {
        else {
         if (pinDoorSensorState == LOW) {
           pinDoorSensorState = HIGH;
-          if ((!firstTime) and (webClient.connect(host, httpPort)))  {
+          if ((!firstTime))  {
               snprintf (isOpen, 2, "1");
-              snprintf(pubMsg, 80, "{\"temperature\":\"%s\",\"humidity\":\"%s\",\"light\":\"%s\",\"door\":\"%s\",\"switch\":\"%s\"}",bufTemp,bufHum,isON,isOpen,isSwitch);
+              snprintf(pubMsg, 80, "{\"temperature\":\"%s\",\"humidity\":\"%s\",\"light\":\"%s\",\"door\":\"%s\",\"ishuman\":\"%s\"}",bufTemp,bufHum,isON,isOpen,ishuman);
+              client.publish(pubTopicGen, pubMsg,true);
+              delay(50);
+          } else {
+              unsigned long currentMillis2 = millis();
+              if ((currentMillis2 - previousMillis2 > reconnectInveral)) {
+                previousMillis2 = currentMillis2;
+                reconnect();
+              }
+            }
+          }
+       }
+//NEW FEATURE: HUMAN SENSOR WILL DETECT HUMAN IN LOCAL 
+//--------Human sensor analysis and check up---------------
+unsigned long currentMillis111 = millis();
+    if ((checkWifi == true) and (currentMillis111 - previousMillis111 > 20)) {
+        previousMillis111 = currentMillis111;
+        pinControlValue = digitalRead(pinControl);  // read input value
+        if (pinControlValue == LOW) {            // check if the input is HIGH
+          accumchecking++;
+        }
+        else {
+          accumchecking = 0;
+        }
+    }
+
+      if (accumchecking > 2) { 
+        if (pinControlState == LOW) {
+          pinControlState = HIGH;
+          if ((!firstTime)) {
+              snprintf (ishuman, 2, "1");
+              previousMillis22 = millis();
+              snprintf(pubMsg, 80, "{\"temperature\":\"%s\",\"humidity\":\"%s\",\"light\":\"%s\",\"door\":\"%s\",\"ishuman\":\"%s\"}",bufTemp,bufHum,isON,isOpen,ishuman);
+              client.publish(pubTopicGen, pubMsg,true);
+              delay(50);
+          } else {
+              unsigned long currentMillis2 = millis();
+              if ((currentMillis2 - previousMillis2 > reconnectInveral)) {
+                previousMillis2 = currentMillis2;
+                reconnect();
+              }
+          }
+        }
+      }
+       else {
+        unsigned long currentMillis22 = millis();
+        if ((currentMillis22 - previousMillis22 > isHumanDelay)) {
+         if (pinControlState == HIGH) {
+          pinControlState = LOW;
+          if ((!firstTime))  {
+              snprintf (ishuman, 2, "0");
+              snprintf(pubMsg, 80, "{\"temperature\":\"%s\",\"humidity\":\"%s\",\"light\":\"%s\",\"door\":\"%s\",\"ishuman\":\"%s\"}",bufTemp,bufHum,isON,isOpen,ishuman);
               client.publish(pubTopicGen, pubMsg,true);
               delay(50);
           } else {
@@ -697,7 +809,41 @@ void loop() {
             }
           }
         }
+       }    
+//-------------------------------------------
+//NEW FEATURE: SPEAKER WILL ALRM if trigger
+//----------------------------------------
+      if (isAlarmActive) {
+        unsigned long currentMillis33 = millis();
+
+        if (currentMillis33 - previousMillis33 >= 200) {
+        // save the last time you blinked the LED
+          previousMillis33 = currentMillis33;
+
+       // if the LED is off turn it on and vice-versa:
+        if (pinSpeakerState == LOW) {
+          pinSpeakerState = HIGH;
+        } else {
+          pinSpeakerState = LOW;
+          }
+        // set the LED with the ledState of the variable:
+        digitalWrite(pinSpeaker, pinSpeakerState);
+        }
+      } else {
+        digitalWrite(pinSpeaker, HIGH);
+      }
 }
 
-
+void playTone(long duration, int freq) {
+    duration *= 1000;
+    int period = (1.0 / freq) * 1000000;
+    long elapsed_time = 0;
+    while (elapsed_time < duration) {
+        digitalWrite(pinSpeaker,HIGH);
+        delayMicroseconds(period / 2);
+        digitalWrite(pinSpeaker, LOW);
+        delayMicroseconds(period / 2);
+        elapsed_time += (period);
+    }
+}
 
